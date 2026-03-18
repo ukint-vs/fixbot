@@ -14,7 +14,7 @@ import { join, resolve } from "node:path";
 import * as readline from "node:readline";
 import { AuthCredentialStore, getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
-import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
+import { getAgentDbPath } from "@oh-my-pi/pi-utils";
 import {
 	ask,
 	askSecret,
