@@ -182,6 +182,19 @@ install_via_bun() {
         exit 1
     }
 
+    # Build native addons (requires Rust toolchain)
+    if command -v cargo >/dev/null 2>&1; then
+        echo "Building native addons..."
+        (cd "$SOURCE_DIR" && bun run build:native) || {
+            echo "⚠ Native addon build failed. fixbot will work but some features (search, media) may be slower."
+            echo "  To retry later: cd ${SOURCE_DIR} && bun run build:native"
+        }
+    else
+        echo "⚠ Rust toolchain not found — skipping native addon build."
+        echo "  fixbot will work but some features (search, media) may be slower."
+        echo "  Install Rust (https://rustup.rs) then run: cd ${SOURCE_DIR} && bun run build:native"
+    fi
+
     # Create wrapper script
     mkdir -p "$INSTALL_DIR"
     cat > "${INSTALL_DIR}/fixbot" <<WRAPPER

@@ -231,6 +231,26 @@ function Install-ViaBun {
         Pop-Location
     }
 
+    # Build native addons (requires Rust toolchain)
+    try {
+        $null = Get-Command cargo -ErrorAction Stop
+        Write-Host "Building native addons..."
+        Push-Location $sourceDir
+        try {
+            bun run build:native
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "⚠ Native addon build failed. fixbot will work but some features may be slower." -ForegroundColor Yellow
+                Write-Host "  To retry later: cd $sourceDir && bun run build:native" -ForegroundColor Yellow
+            }
+        } finally {
+            Pop-Location
+        }
+    } catch {
+        Write-Host "⚠ Rust toolchain not found — skipping native addon build." -ForegroundColor Yellow
+        Write-Host "  fixbot will work but some features (search, media) may be slower." -ForegroundColor Yellow
+        Write-Host "  Install Rust (https://rustup.rs) then run: cd $sourceDir; bun run build:native" -ForegroundColor Yellow
+    }
+
     # Create wrapper script
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
     $cliPath = Join-Path $sourceDir "packages\coding-agent\src\cli.ts"
