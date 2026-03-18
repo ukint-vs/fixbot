@@ -11,7 +11,7 @@ import {
 	ModelRegistry,
 	SessionManager,
 	Settings,
-} from "@fixbot/pi-coding-agent";
+} from "@oh-my-pi/pi-coding-agent";
 import { createGhReadOnlyEnvironment } from "./gh-read-only";
 import { resolveHostAgentConfig } from "./host-agent";
 import { parseResultMarkers } from "./markers";
@@ -333,7 +333,7 @@ function serializeTraceEvent(event: AgentSessionEvent): Record<string, unknown> 
  * - Read-only GitHub access via a gh wrapper
  * - No extensions, MCP, LSP, or persistent state
  *
- * Integration point: createAgentSession() from @fixbot/pi-coding-agent SDK.
+ * Integration point: createAgentSession() from @oh-my-pi/pi-coding-agent SDK.
  * This is intentionally the ONLY coupling to the oh-my-pi codebase, keeping
  * upstream syncs clean. All job-specific logic lives in this package.
  *

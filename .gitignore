@@ -39,6 +39,8 @@ packages/ai/test/.temp-images/
 
 # Project specific
 !.omp/
+!.fixbot/
+CLAUDE.md
 .pi_config/
 .opencode/
 .worktrees/

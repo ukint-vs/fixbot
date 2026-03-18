@@ -1,8 +1,8 @@
 #!/bin/sh
 set -e
 
-# OMP Coding Agent Installer
-# Usage: curl -fsSL https://raw.githubusercontent.com/can1357/oh-my-pi/main/scripts/install.sh | sh
+# fixbot Installer
+# Usage: curl -fsSL https://raw.githubusercontent.com/ukint-vs/fixbot/main/scripts/install.sh | sh
 #
 # Options:
 #   --source       Install via bun (installs bun if needed)
@@ -10,7 +10,7 @@ set -e
 #   --ref <ref>    Install specific tag/commit/branch
 #   -r <ref>       Shorthand for --ref
 
-REPO="can1357/oh-my-pi"
+REPO="ukint-vs/fixbot"
 PACKAGE="@oh-my-pi/pi-coding-agent"
 INSTALL_DIR="${PI_INSTALL_DIR:-$HOME/.local/bin}"
 MIN_BUN_VERSION="1.3.7"
@@ -179,8 +179,8 @@ install_via_bun() {
         }
     fi
     echo ""
-    echo "✓ Installed omp via bun"
-    echo "Run 'omp' to get started!"
+    echo "✓ Installed fixbot via bun"
+    echo "Run 'fixbot' to get started!"
 }
 
 # Install binary from GitHub releases
@@ -201,7 +201,7 @@ install_binary() {
         *)             echo "Unsupported architecture: $ARCH"; exit 1 ;;
     esac
 
-    BINARY="omp-${PLATFORM}-${ARCH}"
+    BINARY="fixbot-${PLATFORM}-${ARCH}"
     # Get release tag
     if [ -n "$REF" ]; then
         echo "Fetching release $REF..."
@@ -228,8 +228,8 @@ install_binary() {
     # Download binary
     BINARY_URL="https://github.com/${REPO}/releases/download/${LATEST}/${BINARY}"
     echo "Downloading ${BINARY}..."
-    curl -fsSL "$BINARY_URL" -o "${INSTALL_DIR}/omp"
-    chmod +x "${INSTALL_DIR}/omp"
+    curl -fsSL "$BINARY_URL" -o "${INSTALL_DIR}/fixbot"
+    chmod +x "${INSTALL_DIR}/fixbot"
     downloaded_native=0
     if [ "$ARCH" = "x64" ]; then
         for variant in modern baseline; do
@@ -250,13 +250,13 @@ install_binary() {
         downloaded_native=1
     fi
     echo ""
-    echo "✓ Installed omp to ${INSTALL_DIR}/omp"
+    echo "✓ Installed fixbot to ${INSTALL_DIR}/fixbot"
     echo "✓ Installed ${downloaded_native} native addon file(s) to ${INSTALL_DIR}"
 
     # Check if in PATH
     case ":$PATH:" in
-        *":$INSTALL_DIR:"*) echo "Run 'omp' to get started!" ;;
-        *) echo "Add ${INSTALL_DIR} to your PATH, then run 'omp'" ;;
+        *":$INSTALL_DIR:"*) echo "Run 'fixbot' to get started!" ;;
+        *) echo "Add ${INSTALL_DIR} to your PATH, then run 'fixbot'" ;;
     esac
 }
 

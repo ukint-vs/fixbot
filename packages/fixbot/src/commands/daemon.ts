@@ -1,4 +1,4 @@
-import { Args, Command, Flags } from "@fixbot/pi-utils/cli";
+import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
 
 const ACTIONS = ["start", "stop", "status", "health", "enqueue"] as const;
 type DaemonAction = (typeof ACTIONS)[number];

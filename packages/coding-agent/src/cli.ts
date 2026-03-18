@@ -1,5 +1,5 @@
 #!/usr/bin/env bun
-import { APP_NAME, MIN_BUN_VERSION, VERSION } from "@oh-my-pi/pi-utils";
+import { APP_NAME, checkConfigMigration, MIN_BUN_VERSION, VERSION } from "@oh-my-pi/pi-utils";
 /**
  * CLI entry point — registers all commands explicitly and delegates to the
  * lightweight CLI runner from pi-utils.
@@ -41,22 +41,45 @@ if (Bun.stringWidth("\x1b[0m\x1b]8;;\x07") !== 0) {
 }
 
 process.title = APP_NAME;
+checkConfigMigration();
+
+/** Load a fixbot-package command via relative path, with a stub fallback when not available. */
+function fixbotCommand(relativePath: string, description: string): () => Promise<unknown> {
+	return () => import(relativePath).then(m => m.default).catch(() => {
+		// Return a stub command class so help rendering works even without the fixbot package.
+		// Uses a plain class (no require() or import) to avoid ESM/CJS issues.
+		return class {
+			static description = `${description} (requires monorepo install)`;
+			static args = {};
+			static flags = {};
+			constructor(public argv: string[], public config: unknown) {}
+			parse(_: unknown) { return { args: {}, flags: {} }; }
+			async run() {
+				throw new Error("This command requires a full fixbot monorepo install. See README for instructions.");
+			}
+		};
+	});
+}
 
 const commands: CommandEntry[] = [
 	{ name: "launch", load: () => import("./commands/launch").then(m => m.default) },
 	{ name: "agents", load: () => import("./commands/agents").then(m => m.default) },
 	{ name: "commit", load: () => import("./commands/commit").then(m => m.default) },
 	{ name: "config", load: () => import("./commands/config").then(m => m.default) },
+	{ name: "daemon", load: fixbotCommand("../../fixbot/src/commands/daemon", "Manage the fixbot daemon") },
 	{ name: "grep", load: () => import("./commands/grep").then(m => m.default) },
+	{ name: "init", load: fixbotCommand("../../fixbot/src/commands/init", "Interactive setup wizard for fixbot daemon") },
 	{ name: "jupyter", load: () => import("./commands/jupyter").then(m => m.default) },
 	{ name: "login", load: () => import("./commands/login").then(m => m.default) },
 	{ name: "logout", load: () => import("./commands/logout").then(m => m.default) },
 	{ name: "plugin", load: () => import("./commands/plugin").then(m => m.default) },
+	{ name: "run", load: fixbotCommand("../../fixbot/src/commands/run", "Run a single fixbot job") },
 	{ name: "setup", load: () => import("./commands/setup").then(m => m.default) },
 	{ name: "shell", load: () => import("./commands/shell").then(m => m.default) },
 	{ name: "ssh", load: () => import("./commands/ssh").then(m => m.default) },
 	{ name: "stats", load: () => import("./commands/stats").then(m => m.default) },
 	{ name: "update", load: () => import("./commands/update").then(m => m.default) },
+	{ name: "validate-job", load: fixbotCommand("../../fixbot/src/commands/validate-job", "Validate a fixbot job spec") },
 	{ name: "search", load: () => import("./commands/web-search").then(m => m.default), aliases: ["q"] },
 ];
 

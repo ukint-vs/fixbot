@@ -1,5 +1,5 @@
 {
-	"name": "omp-monorepo",
+	"name": "fixbot",
 	"private": true,
 	"type": "module",
 	"workspaces": [

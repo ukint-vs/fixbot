@@ -21,9 +21,9 @@
 		}
 	},
 	"dependencies": {
-		"@fixbot/pi-ai": "workspace:*",
-		"@fixbot/pi-coding-agent": "workspace:*",
-		"@fixbot/pi-utils": "workspace:*"
+		"@oh-my-pi/pi-ai": "workspace:*",
+		"@oh-my-pi/pi-coding-agent": "workspace:*",
+		"@oh-my-pi/pi-utils": "workspace:*"
 	},
 	"scripts": {
 		"test": "bun test"

@@ -11,8 +11,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { AuthCredentialStore } from "@fixbot/pi-ai";
-import { getAgentDbPath, getAgentDir } from "@fixbot/pi-utils";
+import { AuthCredentialStore } from "@oh-my-pi/pi-ai";
+import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
 import {
 	ask,
 	askSecret,

@@ -1,4 +1,4 @@
-import { Args, Command } from "@fixbot/pi-utils/cli";
+import { Args, Command } from "@oh-my-pi/pi-utils/cli";
 
 export default class ValidateJob extends Command {
 	static description = "Validate a fixbot job spec";
