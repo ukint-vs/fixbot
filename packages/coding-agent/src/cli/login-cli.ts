@@ -5,7 +5,7 @@
  * managing OAuth provider authentication from the terminal.
  */
 import * as readline from "node:readline";
-import { getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
+import { getOAuthProviders, type OAuthProviderId, type OAuthProviderInfo } from "@oh-my-pi/pi-ai";
 import { APP_NAME, getAgentDbPath } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
 import { discoverAuthStorage } from "../sdk";
@@ -84,6 +84,21 @@ async function pickProvider(): Promise<string | undefined> {
 }
 
 // =============================================================================
+// Provider Validation
+// =============================================================================
+
+function resolveProvider(providerId: string): OAuthProviderInfo {
+	const providers = getOAuthProviders();
+	const providerInfo = providers.find(p => p.id === providerId);
+	if (!providerInfo) {
+		console.error(chalk.red(`Unknown provider: ${providerId}`));
+		console.error(chalk.dim(`Run '${APP_NAME} login --status' to see available providers`));
+		process.exit(1);
+	}
+	return providerInfo;
+}
+
+// =============================================================================
 // Login Command
 // =============================================================================
 
@@ -111,14 +126,7 @@ export async function runLoginCommand(args: LoginCommandArgs): Promise<void> {
 		}
 	}
 
-	// Validate provider
-	const providers = getOAuthProviders();
-	const providerInfo = providers.find(p => p.id === providerId);
-	if (!providerInfo) {
-		console.error(chalk.red(`Unknown provider: ${providerId}`));
-		console.error(chalk.dim(`Run '${APP_NAME} login --status' to see available providers`));
-		process.exit(1);
-	}
+	const providerInfo = resolveProvider(providerId);
 
 	// Check if already logged in
 	if (authStorage.has(providerId)) {
@@ -184,14 +192,7 @@ export async function runLogoutCommand(args: LogoutCommandArgs): Promise<void> {
 	}
 
 	const providerId = args.provider;
-
-	// Validate provider
-	const providers = getOAuthProviders();
-	const providerInfo = providers.find(p => p.id === providerId);
-	if (!providerInfo) {
-		console.error(chalk.red(`Unknown provider: ${providerId}`));
-		process.exit(1);
-	}
+	const providerInfo = resolveProvider(providerId);
 
 	// Check if logged in
 	if (!authStorage.has(providerId)) {

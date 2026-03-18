@@ -11,7 +11,7 @@ export default class Logout extends Command {
 	static args = {
 		provider: Args.string({
 			description: "Provider ID (e.g. anthropic, openai-codex, github-copilot)",
-			required: false,
+			required: true,
 		}),
 	};
 
