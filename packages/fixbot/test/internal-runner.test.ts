@@ -1,8 +1,8 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModels } from "@fixbot/pi-ai";
-import { AuthStorage, ModelRegistry } from "@fixbot/pi-coding-agent";
+import { getModels } from "@oh-my-pi/pi-ai";
+import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { afterEach, describe, expect, it } from "bun:test";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
 import {

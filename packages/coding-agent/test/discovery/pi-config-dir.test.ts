@@ -16,7 +16,7 @@ describe("PI_CONFIG_DIR", () => {
 	});
 
 	test("getUserPath uses PI_CONFIG_DIR for native userAgent", () => {
-		process.env.PI_CONFIG_DIR = ".config/omp";
+		process.env.PI_CONFIG_DIR = ".config/fixbot";
 		const ctx: LoadContext = {
 			cwd: "/work/project",
 			home: "/home/tester",
@@ -24,13 +24,13 @@ describe("PI_CONFIG_DIR", () => {
 		};
 
 		const result = getUserPath(ctx, "native", "commands");
-		expect(result).toBe(path.join(ctx.home, ".config/omp/agent", "commands"));
+		expect(result).toBe(path.join(ctx.home, ".config/fixbot/agent", "commands"));
 	});
 
 	test("getConfigDirs respects PI_CONFIG_DIR for user base", () => {
-		process.env.PI_CONFIG_DIR = ".config/omp";
+		process.env.PI_CONFIG_DIR = ".config/fixbot";
 		const result = getConfigDirs("commands", { project: false });
-		const expected = path.resolve(path.join(os.homedir(), ".config/omp", "agent", "commands"));
-		expect(result[0]).toEqual({ path: expected, source: ".omp", level: "user" });
+		const expected = path.resolve(path.join(os.homedir(), ".config/fixbot", "agent", "commands"));
+		expect(result[0]).toEqual({ path: expected, source: ".fixbot", level: "user" });
 	});
 });

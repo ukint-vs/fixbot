@@ -1,4 +1,4 @@
-import { Args, Command } from "@fixbot/pi-utils/cli";
+import { Args, Command } from "@oh-my-pi/pi-utils/cli";
 
 export default class Run extends Command {
 	static description = "Run a single fixbot job";

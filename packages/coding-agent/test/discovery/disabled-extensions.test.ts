@@ -14,12 +14,12 @@ describe("disabledExtensions runtime filtering", () => {
 	beforeEach(async () => {
 		_resetSettingsForTest();
 		originalHome = process.env.HOME;
-		tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-ext-home-"));
+		tempHomeDir = await fs.mkdtemp(path.join(os.tmpdir(), "fixbot-disabled-ext-home-"));
 		process.env.HOME = tempHomeDir;
 		vi.spyOn(os, "homedir").mockReturnValue(tempHomeDir);
-		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "omp-disabled-ext-"));
-		await fs.mkdir(path.join(tempDir, ".omp"), { recursive: true });
-		await fs.writeFile(path.join(tempDir, ".omp", "AGENTS.md"), "# project instructions\n");
+		tempDir = await fs.mkdtemp(path.join(os.tmpdir(), "fixbot-disabled-ext-"));
+		await fs.mkdir(path.join(tempDir, ".fixbot"), { recursive: true });
+		await fs.writeFile(path.join(tempDir, ".fixbot", "AGENTS.md"), "# project instructions\n");
 
 		const settings = await Settings.init({
 			inMemory: true,

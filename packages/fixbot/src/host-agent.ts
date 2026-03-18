@@ -1,9 +1,9 @@
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Api, Model } from "@fixbot/pi-ai";
-import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@fixbot/pi-coding-agent";
-import { getAgentDbPath, getAgentDir } from "@fixbot/pi-utils";
+import type { Api, Model } from "@oh-my-pi/pi-ai";
+import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
+import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
 import type { ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
 
 export interface HostAgentConfig {

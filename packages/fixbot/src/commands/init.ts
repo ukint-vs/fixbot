@@ -1,4 +1,4 @@
-import { Command } from "@fixbot/pi-utils/cli";
+import { Command } from "@oh-my-pi/pi-utils/cli";
 
 export default class Init extends Command {
 	static description = "Interactive setup wizard for fixbot daemon";

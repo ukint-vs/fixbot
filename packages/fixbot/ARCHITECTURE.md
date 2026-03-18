@@ -26,7 +26,7 @@ The fixbot package depends on the oh-my-pi SDK through a single integration poin
 ```
   packages/fixbot/src/internal-runner.ts
        |
-       | imports only from @fixbot/pi-coding-agent (public SDK)
+       | imports only from @oh-my-pi/pi-coding-agent (public SDK)
        |
        v
   createAgentSession()   -- the ONLY coupling to oh-my-pi internals
@@ -34,7 +34,7 @@ The fixbot package depends on the oh-my-pi SDK through a single integration poin
 
 This is intentional. By using only the public `createAgentSession()` API, upstream syncs stay clean -- when oh-my-pi evolves, we update the upstream packages and fixbot's integration point stays the same.
 
-**Do not** import internal oh-my-pi classes or modules from fixbot. Use only the public exports from `@fixbot/pi-coding-agent`.
+**Do not** import internal oh-my-pi classes or modules from fixbot. Use only the public exports from `@oh-my-pi/pi-coding-agent`.
 
 ## Job Worker Model
 
@@ -42,7 +42,7 @@ Each fixbot daemon job spawns an oh-my-pi coding agent session as its worker:
 
 ```
   ┌─────────────────────────────────────────────────┐
-  │  createAgentSession() from @fixbot/pi-coding-agent  │
+  │  createAgentSession() from @oh-my-pi/pi-coding-agent  │
   │                                                 │
   │  skills: discovered oh-my-pi + fixbot task skill │
   │  contextFiles: [injected job context]           │

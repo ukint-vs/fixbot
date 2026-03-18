@@ -2,7 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModels } from "@fixbot/pi-ai";
+import { getModels } from "@oh-my-pi/pi-ai";
 import { describe, expect, it } from "bun:test";
 import { normalizeJobSpec } from "../src/contracts";
 import type { PreparedJobContext, PreparedJobExecutor } from "../src/execution";
