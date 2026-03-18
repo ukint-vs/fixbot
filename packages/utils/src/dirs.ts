@@ -231,7 +231,7 @@ export function getLogsDir(): string {
 	return dirs.rootSubdir("logs", "state");
 }
 
-/** Get the path to a dated log file (~/.fixbot/logs/omp.YYYY-MM-DD.log). */
+/** Get the path to a dated log file (~/.fixbot/logs/fixbot.YYYY-MM-DD.log). */
 export function getLogPath(date = new Date()): string {
 	return path.join(getLogsDir(), `${APP_NAME}.${date.toISOString().slice(0, 10)}.log`);
 }
@@ -251,9 +251,9 @@ export function getPluginsPackageJson(): string {
 	return path.join(getPluginsDir(), "package.json");
 }
 
-/** Plugin lock file (~/.fixbot/plugins/omp-plugins.lock.json). */
+/** Plugin lock file (~/.fixbot/plugins/fixbot-plugins.lock.json). */
 export function getPluginsLockfile(): string {
-	return path.join(getPluginsDir(), "omp-plugins.lock.json");
+	return path.join(getPluginsDir(), "fixbot-plugins.lock.json");
 }
 
 /** Get the remote mount directory (~/.fixbot/remote). */
@@ -370,12 +370,12 @@ export function getTerminalSessionsDir(agentDir?: string): string {
 	return dirs.agentSubdir(agentDir, "terminal-sessions", "state");
 }
 
-/** Get the crash log path (~/.fixbot/agent/omp-crash.log). */
+/** Get the crash log path (~/.fixbot/agent/fixbot-crash.log). */
 export function getCrashLogPath(agentDir?: string): string {
-	return dirs.agentSubdir(agentDir, "omp-crash.log", "state");
+	return dirs.agentSubdir(agentDir, "fixbot-crash.log", "state");
 }
 
-/** Get the debug log path (~/.fixbot/agent/omp-debug.log). */
+/** Get the debug log path (~/.fixbot/agent/fixbot-debug.log). */
 export function getDebugLogPath(agentDir?: string): string {
 	return dirs.agentSubdir(agentDir, `${APP_NAME}-debug.log`, "state");
 }

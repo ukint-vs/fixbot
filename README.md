@@ -172,7 +172,7 @@ runtime:
 
 ### How Workers Work
 
-Each daemon job is executed by an **oh-my-pi coding agent session** -- the same engine that powers the interactive TUI. The daemon creates an isolated session per job using the SDK's `createAgentSession()`:
+Each daemon job is executed by a **fixbot coding agent session** -- the same engine that powers the interactive TUI. The daemon creates an isolated session per job using the SDK's `createAgentSession()`:
 
 - Full tool suite (bash, read, edit, write, grep, find)
 - All discovered skills (from host agent dir and project)
