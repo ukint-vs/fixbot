@@ -17,7 +17,6 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Repo = "ukint-vs/fixbot"
-$Package = "@oh-my-pi/pi-coding-agent"
 $InstallDir = if ($env:PI_INSTALL_DIR) { $env:PI_INSTALL_DIR } else { "$env:LOCALAPPDATA\fixbot" }
 $BinaryName = "fixbot-windows-x64.exe"
 $NativeAddonNames = @("pi_natives.win32-x64-modern.node", "pi_natives.win32-x64-baseline.node")
@@ -170,62 +169,69 @@ function Install-Bun {
 }
 
 function Install-ViaBun {
-    Write-Host "Installing via bun..."
-    if ($Ref) {
-        if (-not (Test-GitInstalled)) {
-            throw "git is required for -Ref when installing from source"
+    # Always install from source — the npm package registers the upstream binary name (omp)
+    Write-Host "Installing via bun from source..."
+    if (-not (Test-GitInstalled)) {
+        throw "git is required for source install"
+    }
+
+    $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fixbot-install-" + [System.Guid]::NewGuid().ToString("N"))
+    New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
+
+    $cloneRef = if ($Ref) { $Ref } else { "main" }
+
+    try {
+        $repoUrl = "https://github.com/$Repo.git"
+        $cloneOk = $false
+        try {
+            git clone --depth 1 --branch $cloneRef $repoUrl $tmpRoot | Out-Null
+            $cloneOk = $true
+        } catch {
+            $cloneOk = $false
         }
 
-        $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fixbot-install-" + [System.Guid]::NewGuid().ToString("N"))
-        New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
-
-        try {
-            $repoUrl = "https://github.com/$Repo.git"
-            $cloneOk = $false
+        if (-not $cloneOk) {
+            git clone $repoUrl $tmpRoot | Out-Null
+            Push-Location $tmpRoot
             try {
-                git clone --depth 1 --branch $Ref $repoUrl $tmpRoot | Out-Null
-                $cloneOk = $true
-            } catch {
-                $cloneOk = $false
+                git checkout $cloneRef | Out-Null
+            } finally {
+                Pop-Location
             }
+        }
 
-            if (-not $cloneOk) {
-                git clone $repoUrl $tmpRoot | Out-Null
-                Push-Location $tmpRoot
-                try {
-                    git checkout $Ref | Out-Null
-                } finally {
-                    Pop-Location
-                }
+        # Pull LFS files
+        if (Test-GitLfsInstalled) {
+            Push-Location $tmpRoot
+            try {
+                git lfs pull | Out-Null
+            } finally {
+                Pop-Location
             }
+        }
 
-            # Pull LFS files
-            if (Test-GitLfsInstalled) {
-                Push-Location $tmpRoot
-                try {
-                    git lfs pull | Out-Null
-                } finally {
-                    Pop-Location
-                }
-            }
+        $packagePath = Join-Path $tmpRoot "packages\coding-agent"
+        if (-not (Test-Path $packagePath)) {
+            throw "Expected package at $packagePath"
+        }
 
-            $packagePath = Join-Path $tmpRoot "packages\coding-agent"
-            if (-not (Test-Path $packagePath)) {
-                throw "Expected package at $packagePath"
-            }
-
-            bun install -g $packagePath
+        # Install monorepo dependencies first
+        Push-Location $tmpRoot
+        try {
+            bun install
             if ($LASTEXITCODE -ne 0) {
-                throw "Failed to install from $packagePath via bun"
+                throw "Failed to install dependencies"
             }
         } finally {
-            Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
+            Pop-Location
         }
-    } else {
-        bun install -g $Package
+
+        bun install -g $packagePath
         if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install $Package via bun"
+            throw "Failed to install fixbot"
         }
+    } finally {
+        Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
     }
 
     Write-Host ""
