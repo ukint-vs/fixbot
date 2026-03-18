@@ -3,12 +3,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Api, Model } from "@fixbot/pi-ai";
 import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@fixbot/pi-coding-agent";
-import { getAgentDir } from "@fixbot/pi-utils";
+import { getAgentDbPath, getAgentDir } from "@fixbot/pi-utils";
 import type { ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
 
 export interface HostAgentConfig {
 	hostAgentDir: string;
 	hostAgentDirExists: boolean;
+	authFilePath: string;
+	authFileExists: boolean;
 }
 
 export interface ResolveExecutionModelOptions {
@@ -29,9 +31,12 @@ export function resolveHostAgentConfig(): HostAgentConfig {
 		throw new Error(`Configured FIXBOT_AGENT_DIR does not exist: ${hostAgentDir}`);
 	}
 
+	const authFilePath = getAgentDbPath();
 	return {
 		hostAgentDir,
 		hostAgentDirExists: isExistingDirectory(hostAgentDir),
+		authFilePath,
+		authFileExists: existsSync(authFilePath),
 	};
 }
 

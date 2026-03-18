@@ -10,8 +10,7 @@ import {
 	type DaemonSubmissionSourceV1,
 	type NormalizedDaemonConfigV1,
 } from "../types";
-
-type UnknownRecord = Record<string, unknown>;
+import { assertNonEmptyString, assertObject, assertPositiveInteger, assertTimestamp } from "../validation";
 
 const QUEUE_DIRECTORY_NAME = "queue";
 const ACTIVE_DIRECTORY_NAME = "active";
@@ -57,35 +56,6 @@ export class DuplicateDaemonJobError extends Error {
 		this.jobId = jobId;
 		this.collisions = collisions.map((collision) => ({ ...collision }));
 	}
-}
-
-function assertObject(value: unknown, label: string): UnknownRecord {
-	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error(`${label} must be an object`);
-	}
-	return value as UnknownRecord;
-}
-
-function assertNonEmptyString(value: unknown, label: string): string {
-	if (typeof value !== "string" || value.trim() === "") {
-		throw new Error(`${label} must be a non-empty string`);
-	}
-	return value.trim();
-}
-
-function assertPositiveInteger(value: unknown, label: string): number {
-	if (!Number.isInteger(value) || (value as number) <= 0) {
-		throw new Error(`${label} must be a positive integer`);
-	}
-	return value as number;
-}
-
-function assertTimestamp(value: unknown, label: string): string {
-	const timestamp = assertNonEmptyString(value, label);
-	if (!Number.isFinite(Date.parse(timestamp))) {
-		throw new Error(`${label} must be a valid timestamp`);
-	}
-	return timestamp;
 }
 
 const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label"]);
@@ -205,7 +175,13 @@ function writeAtomicJsonFile(filePath: string, value: unknown): void {
 }
 
 function readJsonFile(filePath: string): unknown {
-	return JSON.parse(readFileSync(filePath, "utf-8")) as unknown;
+	const text = readFileSync(filePath, "utf-8");
+	try {
+		return JSON.parse(text) as unknown;
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		throw new Error(`Failed to parse JSON from "${filePath}": ${msg}`);
+	}
 }
 
 function listJsonFiles(directoryPath: string): string[] {

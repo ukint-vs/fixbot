@@ -11,6 +11,7 @@ import {
 	TASK_CLASSES,
 	type TaskClass,
 } from "./types";
+import { assertNonEmptyString, assertObject, assertPositiveInteger } from "./validation";
 
 export const MIN_TIMEOUT_MS = 60_000;
 export const MAX_TIMEOUT_MS = 3_600_000;
@@ -24,29 +25,6 @@ export const MAX_MEMORY_LIMIT_MB = 32_768;
  * filesystem paths (e.g. `results/job-${jobId}/`).
  */
 export const JOB_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}$/;
-
-type UnknownRecord = Record<string, unknown>;
-
-function assertObject(value: unknown, label: string): UnknownRecord {
-	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error(`${label} must be an object`);
-	}
-	return value as UnknownRecord;
-}
-
-function assertNonEmptyString(value: unknown, label: string): string {
-	if (typeof value !== "string" || value.trim() === "") {
-		throw new Error(`${label} must be a non-empty string`);
-	}
-	return value.trim();
-}
-
-function assertPositiveInteger(value: unknown, label: string): number {
-	if (!Number.isInteger(value) || (value as number) <= 0) {
-		throw new Error(`${label} must be a positive integer`);
-	}
-	return value as number;
-}
 
 function parseSandboxConfig(
 	value: unknown,

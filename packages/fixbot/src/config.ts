@@ -22,6 +22,13 @@ import {
 	TASK_CLASSES,
 	type TaskClass,
 } from "./types";
+import {
+	assertBoolean,
+	assertNonEmptyString,
+	assertNonNegativeInteger,
+	assertObject,
+	assertPositiveInteger,
+} from "./validation";
 
 export const DEFAULT_DAEMON_HEARTBEAT_INTERVAL_MS = 5_000;
 export const DEFAULT_DAEMON_IDLE_SLEEP_MS = 1_000;
@@ -29,8 +36,6 @@ export const DEFAULT_DAEMON_STATUS_FILE = "daemon-status.json";
 export const DEFAULT_DAEMON_PID_FILE = "daemon.pid";
 export const DEFAULT_DAEMON_LOCK_FILE = "daemon.lock";
 export const DEFAULT_BOT_URL = "https://github.com/nicobailon/fixbot";
-
-type UnknownRecord = Record<string, unknown>;
 
 export interface CreateDaemonStatusInput {
 	state: DaemonLifecycleState;
@@ -42,41 +47,6 @@ export interface CreateDaemonStatusInput {
 	queue?: DaemonQueueStatusV1;
 	activeJob?: DaemonActiveJobStatusV1 | null;
 	recentResults?: DaemonRecentResultSummaryV1[];
-}
-
-function assertObject(value: unknown, label: string): UnknownRecord {
-	if (!value || typeof value !== "object" || Array.isArray(value)) {
-		throw new Error(`${label} must be an object`);
-	}
-	return value as UnknownRecord;
-}
-
-function assertNonEmptyString(value: unknown, label: string): string {
-	if (typeof value !== "string" || value.trim() === "") {
-		throw new Error(`${label} must be a non-empty string`);
-	}
-	return value.trim();
-}
-
-function assertPositiveInteger(value: unknown, label: string): number {
-	if (!Number.isInteger(value) || (value as number) <= 0) {
-		throw new Error(`${label} must be a positive integer`);
-	}
-	return value as number;
-}
-
-function assertNonNegativeInteger(value: unknown, label: string): number {
-	if (!Number.isInteger(value) || (value as number) < 0) {
-		throw new Error(`${label} must be a non-negative integer`);
-	}
-	return value as number;
-}
-
-function assertBoolean(value: unknown, label: string): boolean {
-	if (typeof value !== "boolean") {
-		throw new Error(`${label} must be a boolean`);
-	}
-	return value;
 }
 
 function resolveConfigBaseDir(source: string): string {

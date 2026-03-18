@@ -83,7 +83,14 @@ export async function fetchLabeledIssues(
 		logger?.(`[fixbot] github-poll warn: fetchLabeledIssues ${owner}/${repo} returned ${response.status}`);
 		return [];
 	}
-	const data = (await response.json()) as Array<{ number: number; title: string }>;
+	let data: Array<{ number: number; title: string }>;
+	try {
+		data = (await response.json()) as Array<{ number: number; title: string }>;
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		logger?.(`[fixbot] github-poll warn: fetchLabeledIssues ${owner}/${repo} malformed JSON: ${msg}`);
+		return [];
+	}
 	return data.map((issue) => ({ number: issue.number, title: issue.title }));
 }
 
@@ -107,7 +114,14 @@ export async function fetchLatestFailedRun(
 		logger?.(`[fixbot] github-poll warn: fetchLatestFailedRun ${owner}/${repo} returned ${response.status}`);
 		return null;
 	}
-	const data = (await response.json()) as { workflow_runs: Array<{ id: number }> };
+	let data: { workflow_runs: Array<{ id: number }> };
+	try {
+		data = (await response.json()) as { workflow_runs: Array<{ id: number }> };
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		logger?.(`[fixbot] github-poll warn: fetchLatestFailedRun ${owner}/${repo} malformed JSON: ${msg}`);
+		return null;
+	}
 	if (!data.workflow_runs || data.workflow_runs.length === 0) {
 		return null;
 	}
@@ -161,7 +175,16 @@ export async function hasAckComment(
 		);
 		return false;
 	}
-	const comments = (await response.json()) as Array<{ body?: string }>;
+	let comments: Array<{ body?: string }>;
+	try {
+		comments = (await response.json()) as Array<{ body?: string }>;
+	} catch (error) {
+		const msg = error instanceof Error ? error.message : String(error);
+		logger?.(
+			`[fixbot] github-poll warn: hasAckComment ${owner}/${repo}#${issueNumber} malformed JSON: ${msg}`,
+		);
+		return false;
+	}
 	return comments.some((comment) => comment.body?.includes("<!-- fixbot-ack -->"));
 }
 

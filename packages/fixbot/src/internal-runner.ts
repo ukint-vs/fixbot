@@ -155,33 +155,39 @@ export function buildInjectedContext(job: NormalizedJobSpecV1, selectedModel: Mo
 	];
 
 	switch (job.taskClass) {
-		case "fix_ci":
-			sharedLines.push(`- GitHub Actions Run ID: ${job.fixCi!.githubActionsRunId}`);
+		case "fix_ci": {
+			if (!job.fixCi) throw new Error(`fix_ci job "${job.jobId}" is missing fixCi context`);
+			sharedLines.push(`- GitHub Actions Run ID: ${job.fixCi.githubActionsRunId}`);
 			break;
+		}
 		case "fix_lint":
 			sharedLines.push(`- Lint Command: ${job.fixLint?.lintCommand ?? "auto-detect from project config"}`);
 			break;
 		case "fix_tests":
 			sharedLines.push(`- Test Command: ${job.fixTests?.testCommand ?? "auto-detect from project config"}`);
 			break;
-		case "solve_issue":
-			sharedLines.push(`- Issue Number: ${job.solveIssue!.issueNumber}`);
-			if (job.solveIssue?.issueTitle) {
+		case "solve_issue": {
+			if (!job.solveIssue) throw new Error(`solve_issue job "${job.jobId}" is missing solveIssue context`);
+			sharedLines.push(`- Issue Number: ${job.solveIssue.issueNumber}`);
+			if (job.solveIssue.issueTitle) {
 				sharedLines.push(`- Issue Title: ${job.solveIssue.issueTitle}`);
 			}
-			if (job.solveIssue?.issueBody) {
+			if (job.solveIssue.issueBody) {
 				sharedLines.push(`- Issue Body: ${job.solveIssue.issueBody}`);
 			}
 			break;
-		case "fix_cve":
-			sharedLines.push(`- CVE ID: ${job.fixCve!.cveId}`);
-			if (job.fixCve?.vulnerablePackage) {
+		}
+		case "fix_cve": {
+			if (!job.fixCve) throw new Error(`fix_cve job "${job.jobId}" is missing fixCve context`);
+			sharedLines.push(`- CVE ID: ${job.fixCve.cveId}`);
+			if (job.fixCve.vulnerablePackage) {
 				sharedLines.push(`- Vulnerable Package: ${job.fixCve.vulnerablePackage}`);
 			}
-			if (job.fixCve?.targetVersion) {
+			if (job.fixCve.targetVersion) {
 				sharedLines.push(`- Target Version: ${job.fixCve.targetVersion}`);
 			}
 			break;
+		}
 	}
 
 	sharedLines.push(
@@ -218,15 +224,17 @@ export function buildGitFixPrompt(job: NormalizedJobSpecV1): string {
 	];
 
 	switch (job.taskClass) {
-		case "fix_ci":
+		case "fix_ci": {
+			if (!job.fixCi) throw new Error(`fix_ci job "${job.jobId}" is missing fixCi context`);
 			return [
 				`/skill:fix-ci Fix the failing GitHub Actions run in this repository clone.`,
 				`Job ID: ${job.jobId}`,
-				`Run ID: ${job.fixCi!.githubActionsRunId}`,
+				`Run ID: ${job.fixCi.githubActionsRunId}`,
 				`Base branch: ${job.repo.baseBranch}`,
 				...commonSuffix,
 				"Inspect the failing run, fix the underlying issue, and leave the repository in a reviewable state.",
 			].join("\n");
+		}
 		case "fix_lint":
 			return [
 				`/skill:fix-lint Find and fix all lint violations in this repository clone.`,
@@ -245,27 +253,31 @@ export function buildGitFixPrompt(job: NormalizedJobSpecV1): string {
 				...commonSuffix,
 				"Run the tests, diagnose failures, fix the underlying issues, and leave the repository in a reviewable state.",
 			].join("\n");
-		case "solve_issue":
+		case "solve_issue": {
+			if (!job.solveIssue) throw new Error(`solve_issue job "${job.jobId}" is missing solveIssue context`);
 			return [
 				`/skill:solve-issue Address the GitHub issue in this repository clone.`,
 				`Job ID: ${job.jobId}`,
 				`Base branch: ${job.repo.baseBranch}`,
-				`Issue number: ${job.solveIssue!.issueNumber}`,
-				...(job.solveIssue?.issueTitle ? [`Issue title: ${job.solveIssue.issueTitle}`] : []),
+				`Issue number: ${job.solveIssue.issueNumber}`,
+				...(job.solveIssue.issueTitle ? [`Issue title: ${job.solveIssue.issueTitle}`] : []),
 				...commonSuffix,
 				"Read the issue context, implement the smallest correct fix, and leave the repository in a reviewable state.",
 			].join("\n");
-		case "fix_cve":
+		}
+		case "fix_cve": {
+			if (!job.fixCve) throw new Error(`fix_cve job "${job.jobId}" is missing fixCve context`);
 			return [
 				`/skill:fix-cve Remediate the CVE in this repository clone.`,
 				`Job ID: ${job.jobId}`,
 				`Base branch: ${job.repo.baseBranch}`,
-				`CVE ID: ${job.fixCve!.cveId}`,
-				...(job.fixCve?.vulnerablePackage ? [`Vulnerable package: ${job.fixCve.vulnerablePackage}`] : []),
-				...(job.fixCve?.targetVersion ? [`Target version: ${job.fixCve.targetVersion}`] : []),
+				`CVE ID: ${job.fixCve.cveId}`,
+				...(job.fixCve.vulnerablePackage ? [`Vulnerable package: ${job.fixCve.vulnerablePackage}`] : []),
+				...(job.fixCve.targetVersion ? [`Target version: ${job.fixCve.targetVersion}`] : []),
 				...commonSuffix,
 				"Update the vulnerable dependency, verify the fix, run the test suite, and leave the repository in a reviewable state.",
 			].join("\n");
+		}
 	}
 }
 
@@ -365,10 +377,17 @@ export class CodingAgentSessionDriver implements SessionDriver {
 		const { skills: discoveredSkills } = await discoverSkills(input.workspaceDir, input.isolatedAgentDir);
 		const skills = [...discoveredSkills, ...taskSkill];
 
+		let contextContent: string;
+		try {
+			contextContent = readFileSync(input.injectedContextFile, "utf-8");
+		} catch (error) {
+			const msg = error instanceof Error ? error.message : String(error);
+			throw new Error(`Failed to read injected context file "${input.injectedContextFile}": ${msg}`);
+		}
 		const contextFiles = [
 			{
 				path: input.injectedContextFile,
-				content: readFileSync(input.injectedContextFile, "utf-8"),
+				content: contextContent,
 			},
 		];
 
