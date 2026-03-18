@@ -69,8 +69,6 @@ bun link --cwd packages/coding-agent
 
 ### Via installer script
 
-Requires a GitHub release to be published.
-
 **Linux / macOS:**
 
 ```bash
@@ -83,11 +81,14 @@ curl -fsSL https://raw.githubusercontent.com/ukint-vs/fixbot/main/scripts/instal
 irm https://raw.githubusercontent.com/ukint-vs/fixbot/main/scripts/install.ps1 | iex
 ```
 
+The installer clones the repo to `~/.fixbot/source`, installs dependencies, and creates a `fixbot` wrapper in `~/.local/bin` (or `%LOCALAPPDATA%\fixbot` on Windows).
+
 Options:
 
-- POSIX (`install.sh`): `--source`, `--binary`, `--ref <ref>`, `-r <ref>`
-- PowerShell (`install.ps1`): `-Source`, `-Binary`, `-Ref <ref>`
-- `--ref`/`-Ref` with binary mode must reference a release tag; branch/commit refs require source mode
+- `--source` / `-Source` — install via bun from source (default when bun is available)
+- `--binary` / `-Binary` — download prebuilt binary from GitHub Releases (requires a published release)
+- `--ref <ref>` / `-Ref <ref>` — install a specific tag, branch, or commit
+- `--binary` with `--ref` must reference a release tag; branch/commit refs require source mode
 
 Set custom install directory with `PI_INSTALL_DIR`.
 

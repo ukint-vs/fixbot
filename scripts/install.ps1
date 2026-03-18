@@ -169,77 +169,90 @@ function Install-Bun {
 }
 
 function Install-ViaBun {
-    # Always install from source — the npm package registers the upstream binary name (omp)
-    Write-Host "Installing via bun from source..."
+    # Install from source — workspace:* deps require the full monorepo context.
+    # Clones to ~/.fixbot/source and creates a wrapper script in InstallDir.
+    Write-Host "Installing fixbot from source..."
     if (-not (Test-GitInstalled)) {
         throw "git is required for source install"
     }
 
-    $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fixbot-install-" + [System.Guid]::NewGuid().ToString("N"))
-    New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
-
+    $sourceDir = Join-Path $env:USERPROFILE ".fixbot\source"
     $cloneRef = if ($Ref) { $Ref } else { "main" }
 
+    # Clean previous source install
+    if (Test-Path $sourceDir) {
+        Write-Host "Removing previous source install..."
+        Remove-Item -Recurse -Force $sourceDir
+    }
+
+    $repoUrl = "https://github.com/$Repo.git"
+    $cloneOk = $false
     try {
-        $repoUrl = "https://github.com/$Repo.git"
+        git clone --depth 1 --branch $cloneRef $repoUrl $sourceDir | Out-Null
+        $cloneOk = $true
+    } catch {
         $cloneOk = $false
+    }
+
+    if (-not $cloneOk) {
+        git clone $repoUrl $sourceDir | Out-Null
+        Push-Location $sourceDir
         try {
-            git clone --depth 1 --branch $cloneRef $repoUrl $tmpRoot | Out-Null
-            $cloneOk = $true
-        } catch {
-            $cloneOk = $false
-        }
-
-        if (-not $cloneOk) {
-            git clone $repoUrl $tmpRoot | Out-Null
-            Push-Location $tmpRoot
-            try {
-                git checkout $cloneRef | Out-Null
-            } finally {
-                Pop-Location
-            }
-        }
-
-        # Pull LFS files
-        if (Test-GitLfsInstalled) {
-            Push-Location $tmpRoot
-            try {
-                git lfs pull | Out-Null
-            } finally {
-                Pop-Location
-            }
-        }
-
-        $packagePath = Join-Path $tmpRoot "packages\coding-agent"
-        if (-not (Test-Path $packagePath)) {
-            throw "Expected package at $packagePath"
-        }
-
-        # Install monorepo dependencies first
-        Push-Location $tmpRoot
-        try {
-            bun install
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to install dependencies"
-            }
+            git checkout $cloneRef | Out-Null
         } finally {
             Pop-Location
         }
+    }
 
-        bun install -g $packagePath
+    # Pull LFS files
+    if (Test-GitLfsInstalled) {
+        Push-Location $sourceDir
+        try {
+            git lfs pull | Out-Null
+        } finally {
+            Pop-Location
+        }
+    }
+
+    $packagePath = Join-Path $sourceDir "packages\coding-agent"
+    if (-not (Test-Path $packagePath)) {
+        throw "Expected package at $packagePath"
+    }
+
+    # Install monorepo dependencies
+    Write-Host "Installing dependencies..."
+    Push-Location $sourceDir
+    try {
+        bun install
         if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install fixbot"
+            throw "Failed to install dependencies"
         }
     } finally {
-        Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
+        Pop-Location
     }
+
+    # Create wrapper script
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    $cliPath = Join-Path $sourceDir "packages\coding-agent\src\cli.ts"
+    $wrapperPath = Join-Path $InstallDir "fixbot.cmd"
+    Set-Content -Path $wrapperPath -Value "@bun run `"$cliPath`" %*" -Encoding ASCII
 
     Write-Host ""
     Write-Host "✓ Installed fixbot via bun" -ForegroundColor Green
+    Write-Host "  Source: $sourceDir" -ForegroundColor Cyan
+    Write-Host "  Binary: $wrapperPath" -ForegroundColor Cyan
 
     Configure-BashShell
 
-    Write-Host "Run 'fixbot' to get started!"
+    # Add to PATH if not already there
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$InstallDir*") {
+        Write-Host "Adding $InstallDir to PATH..."
+        [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+        Write-Host "Restart your terminal, then run 'fixbot' to get started!"
+    } else {
+        Write-Host "Run 'fixbot' to get started!"
+    }
 }
 
 function Install-Binary {
