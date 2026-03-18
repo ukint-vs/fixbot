@@ -8,29 +8,8 @@ import {
 	type NormalizedJobSpecV1,
 	type TaskClass,
 } from "../types";
+import { parseOwnerRepo } from "./github-reporter";
 import { DuplicateDaemonJobError } from "./job-store";
-
-// ---------------------------------------------------------------------------
-// URL parsing
-// ---------------------------------------------------------------------------
-
-export function parseGitHubRepoPath(url: string): { owner: string; repo: string } {
-	let pathname: string;
-	try {
-		pathname = new URL(url).pathname;
-	} catch {
-		throw new Error(`Invalid GitHub repo URL: ${url}`);
-	}
-	const cleaned = pathname
-		.replace(/^\//, "")
-		.replace(/\/$/, "")
-		.replace(/\.git$/, "");
-	const segments = cleaned.split("/").filter(Boolean);
-	if (segments.length !== 2) {
-		throw new Error(`GitHub repo URL must have exactly owner/repo path segments: ${url}`);
-	}
-	return { owner: segments[0], repo: segments[1] };
-}
 
 // ---------------------------------------------------------------------------
 // Deterministic job ID
@@ -240,7 +219,7 @@ export async function pollGitHubRepos(
 		let owner: string;
 		let repo: string;
 		try {
-			({ owner, repo } = parseGitHubRepoPath(repoConfig.url));
+			({ owner, repo } = parseOwnerRepo(repoConfig.url));
 		} catch (error) {
 			const msg = error instanceof Error ? error.message : String(error);
 			logger?.(`[fixbot] github-poll error: ${msg}`);

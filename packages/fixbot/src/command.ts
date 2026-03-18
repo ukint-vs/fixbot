@@ -98,7 +98,7 @@ export async function spawnCommand(
 			settled = true;
 			cleanup();
 			resolve({
-				exitCode: exitCode ?? 0,
+				exitCode: exitCode ?? (signal ? 1 : 0),
 				signal,
 				stdout,
 				stderr,

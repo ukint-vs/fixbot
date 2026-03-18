@@ -33,7 +33,6 @@ export {
 } from "./daemon/github-app-auth";
 export {
 	deriveGitHubJobId,
-	parseGitHubRepoPath,
 	pollGitHubRepos,
 } from "./daemon/github-poller";
 export {

@@ -1,7 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { createDaemonStatus, loadDaemonConfig } from "../config";
 import { runJob } from "../runner";
 import type {
@@ -148,11 +147,12 @@ function createAbortError(): Error {
 }
 
 function resolveCliLaunch(): { command: string; args: string[] } {
-	// Bun runs TypeScript directly — no tsx or build step needed.
-	const sourceCliPath = fileURLToPath(new URL("../../coding-agent/src/cli.ts", import.meta.url));
+	if (!process.argv[1]) {
+		throw new Error("Unable to determine fixbot CLI path for background daemon");
+	}
 	return {
 		command: process.execPath,
-		args: [sourceCliPath],
+		args: [process.argv[1]],
 	};
 }
 
