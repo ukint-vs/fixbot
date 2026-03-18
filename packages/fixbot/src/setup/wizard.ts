@@ -2,7 +2,7 @@
  * Guided CLI setup wizard for fixbot daemon.
  *
  * Walks a solo developer through:
- *   1. AI provider authentication (API key → saved to agent.db)
+ *   1. AI provider authentication (OAuth or API key → saved to agent.db)
  *   2. GitHub token for repo access + issue polling + PR creation
  *   3. Repository selection (which repos to watch)
  *   4. Daemon config generation
@@ -11,7 +11,9 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { AuthCredentialStore } from "@oh-my-pi/pi-ai";
+import * as readline from "node:readline";
+import { AuthCredentialStore, getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
+import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
 import {
 	ask,
@@ -28,24 +30,26 @@ import {
 } from "./prompt";
 
 // ---------------------------------------------------------------------------
-// Provider definitions (subset most useful for solo dev)
+// Provider definitions for API key auth (subset most useful for solo dev)
 // ---------------------------------------------------------------------------
 
-interface ProviderChoice {
+interface ApiKeyProviderChoice {
 	id: string;
 	name: string;
 	envVar: string;
 	keyPrefix?: string;
 	keyHint: string;
+	dashboardUrl: string;
 }
 
-const PROVIDERS: ProviderChoice[] = [
+const API_KEY_PROVIDERS: ApiKeyProviderChoice[] = [
 	{
 		id: "anthropic",
 		name: "Anthropic (Claude)",
 		envVar: "ANTHROPIC_API_KEY",
 		keyPrefix: "sk-ant-",
 		keyHint: "starts with sk-ant-",
+		dashboardUrl: "https://console.anthropic.com/settings/keys",
 	},
 	{
 		id: "openai",
@@ -53,12 +57,14 @@ const PROVIDERS: ProviderChoice[] = [
 		envVar: "OPENAI_API_KEY",
 		keyPrefix: "sk-",
 		keyHint: "starts with sk-",
+		dashboardUrl: "https://platform.openai.com/api-keys",
 	},
 	{
 		id: "google",
 		name: "Google (Gemini)",
 		envVar: "GEMINI_API_KEY",
 		keyHint: "Gemini API key from ai.google.dev",
+		dashboardUrl: "https://aistudio.google.com/apikey",
 	},
 	{
 		id: "openrouter",
@@ -66,10 +72,42 @@ const PROVIDERS: ProviderChoice[] = [
 		envVar: "OPENROUTER_API_KEY",
 		keyPrefix: "sk-or-",
 		keyHint: "starts with sk-or-",
+		dashboardUrl: "https://openrouter.ai/keys",
 	},
 ];
 
+// Top OAuth providers to highlight (most commonly used for coding agents)
+const FEATURED_OAUTH_PROVIDERS = [
+	"anthropic",
+	"github-copilot",
+	"openai-codex",
+	"google-gemini-cli",
+	"cursor",
+];
+
 const TOTAL_STEPS = 5;
+
+// ---------------------------------------------------------------------------
+// Readline helpers (for OAuth callback prompts)
+// ---------------------------------------------------------------------------
+
+function createReadlineInterface(): readline.Interface {
+	return readline.createInterface({
+		input: process.stdin,
+		output: process.stdout,
+	});
+}
+
+function askQuestion(rl: readline.Interface, question: string): Promise<string> {
+	return new Promise((resolve, reject) => {
+		rl.question(question, (answer) => {
+			resolve(answer.trim());
+		});
+		rl.once("close", () => {
+			reject(new Error("Input closed"));
+		});
+	});
+}
 
 // ---------------------------------------------------------------------------
 // Step 1: AI Provider
@@ -81,8 +119,8 @@ async function setupAiProvider(): Promise<{ provider: string; saved: boolean }> 
 	info("fixbot needs an AI model to analyze code and generate fixes.");
 	info("You can configure multiple providers later — let's start with one.\n");
 
-	// Check if any env vars are already set
-	const envProvider = PROVIDERS.find((p) => process.env[p.envVar]);
+	// Check if any API key env vars are already set
+	const envProvider = API_KEY_PROVIDERS.find((p) => process.env[p.envVar]);
 	if (envProvider) {
 		console.log(`  Found ${envProvider.envVar} in environment.`);
 		const useEnv = await confirm(`Use ${envProvider.name} from environment?`);
@@ -92,7 +130,138 @@ async function setupAiProvider(): Promise<{ provider: string; saved: boolean }> 
 		}
 	}
 
-	const provider = await choose("Which AI provider?", PROVIDERS, (p) => p.name);
+	// Choose auth method
+	const authMethods = [
+		{ id: "oauth", name: "OAuth login (Claude Pro/Max, Copilot, Cursor, etc.)" },
+		{ id: "api-key", name: "API key (Anthropic, OpenAI, Google, OpenRouter)" },
+		{ id: "skip", name: "Skip — set up later with 'fixbot login' or env vars" },
+	];
+
+	const method = await choose("How would you like to authenticate?", authMethods, (m) => m.name);
+
+	if (method.id === "skip") {
+		warn("Skipped — run 'fixbot login <provider>' or set an API key env var before starting the daemon.");
+		return { provider: "none", saved: false };
+	}
+
+	if (method.id === "oauth") {
+		return setupOAuth();
+	}
+
+	return setupApiKey();
+}
+
+async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
+	const allProviders = getOAuthProviders();
+
+	// Build list: featured providers first, then "More providers..." option
+	const featured = FEATURED_OAUTH_PROVIDERS
+		.map((id) => allProviders.find((p) => p.id === id))
+		.filter((p): p is NonNullable<typeof p> => p != null);
+
+	const choices = [
+		...featured.map((p) => ({ id: p.id, name: p.name })),
+		{ id: "__more__", name: `All providers (${allProviders.length} available)` },
+	];
+
+	let providerId: string;
+	const picked = await choose("Which provider?", choices, (c) => c.name);
+
+	if (picked.id === "__more__") {
+		// Show full list
+		console.log("\n  Available OAuth providers:\n");
+		for (let i = 0; i < allProviders.length; i++) {
+			console.log(`  ${String(i + 1).padStart(3, " ")}. ${allProviders[i].name}`);
+		}
+		console.log();
+
+		const rl = createReadlineInterface();
+		try {
+			const answer = await askQuestion(rl, `  Select provider [1-${allProviders.length}]: `);
+			const index = Number.parseInt(answer, 10) - 1;
+			if (Number.isNaN(index) || index < 0 || index >= allProviders.length) {
+				warn(`Invalid selection: ${answer}`);
+				return { provider: "none", saved: false };
+			}
+			providerId = allProviders[index].id;
+		} finally {
+			rl.close();
+		}
+	} else {
+		providerId = picked.id;
+	}
+
+	const providerInfo = allProviders.find((p) => p.id === providerId);
+	if (!providerInfo) {
+		warn("Provider not found");
+		return { provider: "none", saved: false };
+	}
+
+	// Run OAuth flow
+	info(`Opening browser for ${providerInfo.name} authentication...`);
+
+	let authStorage;
+	try {
+		authStorage = await discoverAuthStorage();
+	} catch (error) {
+		warn(`Failed to open credentials database: ${error instanceof Error ? error.message : String(error)}`);
+		return { provider: providerId, saved: false };
+	}
+
+	const rl = createReadlineInterface();
+	try {
+		await authStorage.login(providerId as OAuthProviderId, {
+			onAuth: (authInfo: { url: string; instructions?: string }) => {
+				console.log(`\n  Open this URL in your browser:`);
+				console.log(`  ${authInfo.url}\n`);
+				if (authInfo.instructions) {
+					console.log(`  ${authInfo.instructions}`);
+				}
+				// Try to open browser automatically
+				try {
+					const cmd =
+						process.platform === "darwin"
+							? ["open", authInfo.url]
+							: process.platform === "win32"
+								? ["rundll32", "url.dll,FileProtocolHandler", authInfo.url]
+								: ["xdg-open", authInfo.url];
+					Bun.spawn(cmd, { stdin: "ignore", stdout: "ignore", stderr: "ignore" });
+				} catch {
+					// Best-effort
+				}
+			},
+			onPrompt: async (prompt: { message: string; placeholder?: string }) => {
+				const question = prompt.placeholder
+					? `  ${prompt.message} (${prompt.placeholder}): `
+					: `  ${prompt.message}: `;
+				return askQuestion(rl, question);
+			},
+			onProgress: (message: string) => {
+				console.log(`  ${message}`);
+			},
+			onManualCodeInput: async () => {
+				return askQuestion(rl, "  Paste the authorization code (or full redirect URL): ");
+			},
+		});
+
+		success(`Logged in to ${providerInfo.name}`);
+		console.log(`  Credentials saved to ${getAgentDbPath()}\n`);
+		return { provider: providerId, saved: true };
+	} catch (error) {
+		if (error instanceof Error && error.name === "AbortError") {
+			warn("Login cancelled");
+			return { provider: providerId, saved: false };
+		}
+		warn(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
+		info("You can try again later with 'fixbot login'");
+		return { provider: providerId, saved: false };
+	} finally {
+		rl.close();
+	}
+}
+
+async function setupApiKey(): Promise<{ provider: string; saved: boolean }> {
+	const provider = await choose("Which AI provider?", API_KEY_PROVIDERS, (p) => p.name);
 
 	// Check env var for chosen provider
 	const envKey = process.env[provider.envVar];
@@ -107,15 +276,7 @@ async function setupAiProvider(): Promise<{ provider: string; saved: boolean }> 
 	}
 
 	console.log(`\n  Get your API key:`);
-	if (provider.id === "anthropic") {
-		console.log("  https://console.anthropic.com/settings/keys");
-	} else if (provider.id === "openai") {
-		console.log("  https://platform.openai.com/api-keys");
-	} else if (provider.id === "google") {
-		console.log("  https://aistudio.google.com/apikey");
-	} else if (provider.id === "openrouter") {
-		console.log("  https://openrouter.ai/keys");
-	}
+	console.log(`  ${provider.dashboardUrl}`);
 
 	const apiKey = await askSecret(`\n  Paste your API key (${provider.keyHint})`);
 	if (!apiKey) {
@@ -372,6 +533,11 @@ async function verify(
 
 	console.log("  Next steps:\n");
 
+	if (providerResult.provider === "none") {
+		console.log("  Authenticate with an AI provider:");
+		console.log("    fixbot login\n");
+	}
+
 	console.log("  Run a single job:");
 	console.log("    fixbot run job.json\n");
 
@@ -391,6 +557,11 @@ async function verify(
 
 	console.log("  Check daemon status:");
 	console.log(`    fixbot daemon status --config ${configResult.configPath}\n`);
+
+	console.log("  Manage providers:");
+	console.log("    fixbot login              # add another provider");
+	console.log("    fixbot login --status     # see all provider status");
+	console.log("    fixbot logout <provider>  # remove a provider\n");
 }
 
 // ---------------------------------------------------------------------------
