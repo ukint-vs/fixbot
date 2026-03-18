@@ -1141,6 +1141,8 @@ omp <command> [args] [flags]
 - `config`
 - `grep`
 - `jupyter`
+- `login`
+- `logout`
 - `plugin`
 - `search` (alias: `q`)
 - `setup`
@@ -1320,6 +1322,44 @@ Key ideas:
 
 ---
 
+## How Workers Work
+
+Each fixbot daemon job is executed by an **oh-my-pi coding agent session** -- the same engine that powers the interactive TUI. The daemon creates an isolated session per job using the oh-my-pi SDK's `createAgentSession()`:
+
+- Full tool suite (bash, read, edit, write, grep, find)
+- All discovered oh-my-pi skills (from host agent dir and project)
+- Bundled fixbot task skill per task class (fix-ci, fix-lint, etc.)
+- Injected job context (repo URL, issue details, constraints)
+- Read-only GitHub access (no push/PR from within the agent)
+- In-memory session (no state persistence between jobs)
+- Extensions, MCP, and LSP disabled for reproducibility
+
+The agent works in a fresh clone of the target repository, just like it would in an interactive session -- but constrained to a single task with no user input.
+
+```
+  Daemon (service.ts)
+       |
+       v
+  Runner (runner.ts)          --- clones repo, selects model
+       |
+       v
+  Execution (execution.ts)    --- spawns child process or docker
+       |
+       v
+  Internal Runner             --- creates oh-my-pi agent session
+       |
+       v
+  createAgentSession()        --- single SDK integration point
+       |
+       v
+  session.prompt(skill)       --- agent executes the task
+       |
+       v
+  Parse FIXBOT_RESULT markers --- extract results from output
+```
+
+---
+
 ## Development
 
 ### Debug Command
@@ -1342,6 +1382,7 @@ For architecture and contribution guidelines, see [packages/coding-agent/DEVELOP
 | **[@oh-my-pi/omp-stats](packages/stats)**                 | Local observability dashboard for AI usage statistics                      |
 | **[@oh-my-pi/pi-utils](packages/utils)**                  | Shared utilities (logging, streams, dirs/env/process helpers)              |
 | **[@oh-my-pi/swarm-extension](packages/swarm-extension)** | Swarm orchestration extension package                                      |
+| **[@fixbot/fixbot](packages/fixbot)** ([arch](packages/fixbot/ARCHITECTURE.md)) | Self-hosted AI coding daemon with GitHub integration                       |
 
 ### Rust Crates
 

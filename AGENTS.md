@@ -13,11 +13,16 @@ This repo contains multiple packages, but **`packages/coding-agent/`** is the pr
 | `packages/ai`           | Multi-provider LLM client with streaming support     |
 | `packages/agent`        | Agent runtime with tool calling and state management |
 | `packages/coding-agent` | Main CLI application (primary focus)                 |
+| `packages/fixbot`       | Daemon, runner, job queue, GitHub integration        |
 | `packages/tui`          | Terminal UI library with differential rendering      |
 | `packages/natives`      | bindings for native text/image/grep operations       |
 | `packages/stats`        | Local observability dashboard (`omp stats`)          |
 | `packages/utils`        | Shared utilities (logger, streams, temp files)       |
 | `crates/pi-natives`     | Rust crate for performance-critical text/grep ops    |
+
+### SDK Boundary: fixbot and oh-my-pi
+
+`packages/fixbot/` depends on the oh-my-pi SDK (`@fixbot/pi-coding-agent`) through a single integration point: `createAgentSession()` in `internal-runner.ts`. This is intentional -- all job-specific logic lives in the fixbot package, and the SDK boundary is the only coupling to the upstream oh-my-pi codebase. Do not import internal oh-my-pi classes or modules from fixbot; use only the public exports from `@fixbot/pi-coding-agent`.
 
 ## Code Quality
 

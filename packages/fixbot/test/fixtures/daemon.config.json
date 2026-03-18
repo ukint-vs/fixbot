@@ -1,0 +1,7 @@
+{
+	"version": "fixbot.daemon-config/v1",
+	"paths": {
+		"stateDir": "./tmp/state",
+		"resultsDir": "./tmp/results"
+	}
+}

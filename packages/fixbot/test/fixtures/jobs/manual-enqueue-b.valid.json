@@ -1,0 +1,20 @@
+{
+  "version": "fixbot.job/v1",
+  "jobId": "manual-enqueue-job-b",
+  "taskClass": "fix_ci",
+  "repo": {
+    "url": "https://github.com/example/repo.git",
+    "baseBranch": "main"
+  },
+  "fixCi": {
+    "githubActionsRunId": 99999
+  },
+  "execution": {
+    "timeoutMs": 120000,
+    "memoryLimitMb": 2048,
+    "sandbox": {
+      "mode": "workspace-write",
+      "networkAccess": true
+    }
+  }
+}
