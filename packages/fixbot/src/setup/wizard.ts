@@ -100,11 +100,13 @@ function createReadlineInterface(): readline.Interface {
 
 function askQuestion(rl: readline.Interface, question: string): Promise<string> {
 	return new Promise((resolve, reject) => {
-		rl.question(question, (answer) => {
-			resolve(answer.trim());
-		});
-		rl.once("close", () => {
+		const handleClose = () => {
 			reject(new Error("Input closed"));
+		};
+		rl.once("close", handleClose);
+		rl.question(question, (answer) => {
+			rl.removeListener("close", handleClose);
+			resolve(answer.trim());
 		});
 	});
 }

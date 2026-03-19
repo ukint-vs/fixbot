@@ -163,12 +163,12 @@ install_via_bun() {
         :
     else
         git clone "https://github.com/${REPO}.git" "$SOURCE_DIR"
-        (cd "$SOURCE_DIR" && git checkout "$CLONE_REF")
+        (cd "$SOURCE_DIR" && git checkout "$CLONE_REF" >/dev/null 2>&1)
     fi
 
     # Pull LFS files
     if has_git_lfs; then
-        (cd "$SOURCE_DIR" && git lfs pull)
+        (cd "$SOURCE_DIR" && git lfs pull >/dev/null 2>&1)
     fi
 
     if [ ! -d "$SOURCE_DIR/packages/coding-agent" ]; then
