@@ -11,7 +11,6 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import * as readline from "node:readline";
 import { AuthCredentialStore, getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils";
@@ -87,29 +86,8 @@ const FEATURED_OAUTH_PROVIDERS = [
 
 const TOTAL_STEPS = 5;
 
-// ---------------------------------------------------------------------------
-// Readline helpers (for OAuth callback prompts)
-// ---------------------------------------------------------------------------
-
-function createReadlineInterface(): readline.Interface {
-	return readline.createInterface({
-		input: process.stdin,
-		output: process.stdout,
-	});
-}
-
-function askQuestion(rl: readline.Interface, question: string): Promise<string> {
-	return new Promise((resolve, reject) => {
-		const handleClose = () => {
-			reject(new Error("Input closed"));
-		};
-		rl.once("close", handleClose);
-		rl.question(question, (answer) => {
-			rl.removeListener("close", handleClose);
-			resolve(answer.trim());
-		});
-	});
-}
+// No separate readline — all prompts go through the shared prompt.ts interface
+// to avoid stdin conflicts between competing readline instances.
 
 // ---------------------------------------------------------------------------
 // Step 1: AI Provider
@@ -177,18 +155,13 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 		}
 		console.log();
 
-		const rl = createReadlineInterface();
-		try {
-			const answer = await askQuestion(rl, `  Select provider [1-${allProviders.length}]: `);
-			const index = Number.parseInt(answer, 10) - 1;
-			if (Number.isNaN(index) || index < 0 || index >= allProviders.length) {
-				warn(`Invalid selection: ${answer}`);
-				return { provider: "none", saved: false };
-			}
-			providerId = allProviders[index].id;
-		} finally {
-			rl.close();
+		const answer = await ask(`  Select provider [1-${allProviders.length}]: `);
+		const index = Number.parseInt(answer, 10) - 1;
+		if (Number.isNaN(index) || index < 0 || index >= allProviders.length) {
+			warn(`Invalid selection: ${answer}`);
+			return { provider: "none", saved: false };
 		}
+		providerId = allProviders[index].id;
 	} else {
 		providerId = picked.id;
 	}
@@ -210,7 +183,6 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 		return { provider: providerId, saved: false };
 	}
 
-	const rl = createReadlineInterface();
 	try {
 		await authStorage.login(providerId as OAuthProviderId, {
 			onAuth: (authInfo: { url: string; instructions?: string }) => {
@@ -234,15 +206,15 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 			},
 			onPrompt: async (prompt: { message: string; placeholder?: string }) => {
 				const question = prompt.placeholder
-					? `  ${prompt.message} (${prompt.placeholder}): `
-					: `  ${prompt.message}: `;
-				return askQuestion(rl, question);
+					? `  ${prompt.message} (${prompt.placeholder})`
+					: `  ${prompt.message}`;
+				return ask(`${question}: `);
 			},
 			onProgress: (message: string) => {
 				console.log(`  ${message}`);
 			},
 			onManualCodeInput: async () => {
-				return askQuestion(rl, "  Paste the authorization code (or full redirect URL): ");
+				return ask("  Paste the authorization code (or full redirect URL): ");
 			},
 		});
 
@@ -257,8 +229,6 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 		warn(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
 		info("You can try again later with 'fixbot login'");
 		return { provider: providerId, saved: false };
-	} finally {
-		rl.close();
 	}
 }
 
