@@ -17,7 +17,6 @@ param(
 $ErrorActionPreference = "Stop"
 
 $Repo = "ukint-vs/fixbot"
-$Package = "@oh-my-pi/pi-coding-agent"
 $InstallDir = if ($env:PI_INSTALL_DIR) { $env:PI_INSTALL_DIR } else { "$env:LOCALAPPDATA\fixbot" }
 $BinaryName = "fixbot-windows-x64.exe"
 $NativeAddonNames = @("pi_natives.win32-x64-modern.node", "pi_natives.win32-x64-baseline.node")
@@ -170,70 +169,110 @@ function Install-Bun {
 }
 
 function Install-ViaBun {
-    Write-Host "Installing via bun..."
-    if ($Ref) {
-        if (-not (Test-GitInstalled)) {
-            throw "git is required for -Ref when installing from source"
-        }
+    # Install from source — workspace:* deps require the full monorepo context.
+    # Clones to ~/.fixbot/source and creates a wrapper script in InstallDir.
+    Write-Host "Installing fixbot from source..."
+    if (-not (Test-GitInstalled)) {
+        throw "git is required for source install"
+    }
 
-        $tmpRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("fixbot-install-" + [System.Guid]::NewGuid().ToString("N"))
-        New-Item -ItemType Directory -Force -Path $tmpRoot | Out-Null
+    $sourceDir = Join-Path $env:USERPROFILE ".fixbot\source"
+    $cloneRef = if ($Ref) { $Ref } else { "main" }
 
+    # Clean previous source install
+    if (Test-Path $sourceDir) {
+        Write-Host "Removing previous source install..."
+        Remove-Item -Recurse -Force $sourceDir
+    }
+
+    $repoUrl = "https://github.com/$Repo.git"
+    $cloneOk = $false
+    try {
+        git clone --depth 1 --branch $cloneRef $repoUrl $sourceDir | Out-Null
+        $cloneOk = $true
+    } catch {
+        $cloneOk = $false
+    }
+
+    if (-not $cloneOk) {
+        git clone $repoUrl $sourceDir | Out-Null
+        Push-Location $sourceDir
         try {
-            $repoUrl = "https://github.com/$Repo.git"
-            $cloneOk = $false
-            try {
-                git clone --depth 1 --branch $Ref $repoUrl $tmpRoot | Out-Null
-                $cloneOk = $true
-            } catch {
-                $cloneOk = $false
-            }
-
-            if (-not $cloneOk) {
-                git clone $repoUrl $tmpRoot | Out-Null
-                Push-Location $tmpRoot
-                try {
-                    git checkout $Ref | Out-Null
-                } finally {
-                    Pop-Location
-                }
-            }
-
-            # Pull LFS files
-            if (Test-GitLfsInstalled) {
-                Push-Location $tmpRoot
-                try {
-                    git lfs pull | Out-Null
-                } finally {
-                    Pop-Location
-                }
-            }
-
-            $packagePath = Join-Path $tmpRoot "packages\coding-agent"
-            if (-not (Test-Path $packagePath)) {
-                throw "Expected package at $packagePath"
-            }
-
-            bun install -g $packagePath
-            if ($LASTEXITCODE -ne 0) {
-                throw "Failed to install from $packagePath via bun"
-            }
+            git checkout $cloneRef | Out-Null
         } finally {
-            Remove-Item -Recurse -Force $tmpRoot -ErrorAction SilentlyContinue
-        }
-    } else {
-        bun install -g $Package
-        if ($LASTEXITCODE -ne 0) {
-            throw "Failed to install $Package via bun"
+            Pop-Location
         }
     }
 
+    # Pull LFS files
+    if (Test-GitLfsInstalled) {
+        Push-Location $sourceDir
+        try {
+            git lfs pull | Out-Null
+        } finally {
+            Pop-Location
+        }
+    }
+
+    $packagePath = Join-Path $sourceDir "packages\coding-agent"
+    if (-not (Test-Path $packagePath)) {
+        throw "Expected package at $packagePath"
+    }
+
+    # Install monorepo dependencies
+    Write-Host "Installing dependencies..."
+    Push-Location $sourceDir
+    try {
+        bun install
+        if ($LASTEXITCODE -ne 0) {
+            throw "Failed to install dependencies"
+        }
+    } finally {
+        Pop-Location
+    }
+
+    # Build native addons (requires Rust toolchain)
+    try {
+        $null = Get-Command cargo -ErrorAction Stop
+        Write-Host "Building native addons..."
+        Push-Location $sourceDir
+        try {
+            bun run build:native
+            if ($LASTEXITCODE -ne 0) {
+                Write-Host "⚠ Native addon build failed. fixbot will work but some features may be slower." -ForegroundColor Yellow
+                Write-Host "  To retry later: cd $sourceDir && bun run build:native" -ForegroundColor Yellow
+            }
+        } finally {
+            Pop-Location
+        }
+    } catch {
+        Write-Host "⚠ Rust toolchain not found — skipping native addon build." -ForegroundColor Yellow
+        Write-Host "  fixbot will work but some features (search, media) may be slower." -ForegroundColor Yellow
+        Write-Host "  Install Rust (https://rustup.rs) then run: cd $sourceDir; bun run build:native" -ForegroundColor Yellow
+    }
+
+    # Create wrapper script
+    New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
+    $cliPath = Join-Path $sourceDir "packages\coding-agent\src\cli.ts"
+    $wrapperPath = Join-Path $InstallDir "fixbot.cmd"
+    Set-Content -Path $wrapperPath -Value "@bun run `"$cliPath`" %*" -Encoding ASCII
+
     Write-Host ""
     Write-Host "✓ Installed fixbot via bun" -ForegroundColor Green
+    Write-Host "  Source: $sourceDir" -ForegroundColor Cyan
+    Write-Host "  Binary: $wrapperPath" -ForegroundColor Cyan
 
     Configure-BashShell
 
-    Write-Host "Run 'fixbot' to get started!"
+    # Add to PATH if not already there
+    $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($UserPath -notlike "*$InstallDir*") {
+        Write-Host "Adding $InstallDir to PATH..."
+        [Environment]::SetEnvironmentVariable("Path", "$UserPath;$InstallDir", "User")
+        Write-Host "Restart your terminal, then run 'fixbot' to get started!"
+    } else {
+        Write-Host "Run 'fixbot' to get started!"
+    }
 }
 
 function Install-Binary {
