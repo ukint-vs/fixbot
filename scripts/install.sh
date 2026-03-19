@@ -151,19 +151,37 @@ install_via_bun() {
     SOURCE_DIR="$HOME/.fixbot/source"
     CLONE_REF="${REF:-main}"
 
-    # Clean previous source install
-    if [ -d "$SOURCE_DIR" ]; then
-        echo "Removing previous source install..."
-        rm -rf "$SOURCE_DIR"
-    fi
-
     mkdir -p "$(dirname "$SOURCE_DIR")"
 
-    if git clone --depth 1 --branch "$CLONE_REF" "https://github.com/${REPO}.git" "$SOURCE_DIR" >/dev/null 2>&1; then
-        :
+    if [ -d "$SOURCE_DIR/.git" ]; then
+        # Existing clone — fetch and reset to target ref (preserves target/ cache)
+        echo "Updating existing source install..."
+        (cd "$SOURCE_DIR" && git fetch origin "$CLONE_REF" --depth 1 2>/dev/null && git reset --hard FETCH_HEAD 2>/dev/null) || {
+            # Fetch failed (ref changed type, shallow history issue) — re-clone
+            # but preserve cargo target/ directory to avoid full rebuild
+            CACHED_TARGET=""
+            if [ -d "$SOURCE_DIR/target" ]; then
+                CACHED_TARGET="$(mktemp -d)"
+                mv "$SOURCE_DIR/target" "$CACHED_TARGET/target"
+            fi
+            rm -rf "$SOURCE_DIR"
+            git clone --depth 1 --branch "$CLONE_REF" "https://github.com/${REPO}.git" "$SOURCE_DIR" 2>/dev/null || {
+                git clone "https://github.com/${REPO}.git" "$SOURCE_DIR"
+                (cd "$SOURCE_DIR" && git checkout "$CLONE_REF" 2>/dev/null)
+            }
+            if [ -n "$CACHED_TARGET" ] && [ -d "$CACHED_TARGET/target" ]; then
+                mv "$CACHED_TARGET/target" "$SOURCE_DIR/target"
+                rm -rf "$CACHED_TARGET"
+            fi
+        }
     else
-        git clone "https://github.com/${REPO}.git" "$SOURCE_DIR"
-        (cd "$SOURCE_DIR" && git checkout "$CLONE_REF" >/dev/null 2>&1)
+        # Fresh install
+        if git clone --depth 1 --branch "$CLONE_REF" "https://github.com/${REPO}.git" "$SOURCE_DIR" 2>/dev/null; then
+            :
+        else
+            git clone "https://github.com/${REPO}.git" "$SOURCE_DIR"
+            (cd "$SOURCE_DIR" && git checkout "$CLONE_REF" 2>/dev/null)
+        fi
     fi
 
     # Pull LFS files
@@ -183,7 +201,11 @@ install_via_bun() {
     }
 
     # Build native addons (requires Rust toolchain)
-    if command -v cargo >/dev/null 2>&1; then
+    # Skip if the .node binary already exists (cached from previous build)
+    NATIVE_NODE="$SOURCE_DIR/packages/natives/native/pi_natives.$(uname -s | tr '[:upper:]' '[:lower:]')-$(uname -m | sed 's/x86_64/x64/;s/aarch64/arm64/').node"
+    if [ -f "$NATIVE_NODE" ]; then
+        echo "Native addon already built — skipping cargo build"
+    elif command -v cargo >/dev/null 2>&1; then
         echo "Building native addons..."
         (cd "$SOURCE_DIR" && bun run build:native) || {
             echo "⚠ Native addon build failed. fixbot will work but some features (search, media) may be slower."
