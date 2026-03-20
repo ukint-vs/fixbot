@@ -18,6 +18,13 @@ export function closePrompt(): void {
 	rl = undefined;
 }
 
+/** Close and recreate the readline interface to flush any orphaned .question()
+ *  calls left by external code (e.g. upstream OAuth while(true) loops). */
+export function resetPrompt(): void {
+	closePrompt();
+	// getReadline() lazily recreates on next ask()
+}
+
 /** Ask a question, return the trimmed answer. */
 export async function ask(question: string): Promise<string> {
 	const answer = await getReadline().question(question);

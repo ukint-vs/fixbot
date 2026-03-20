@@ -23,6 +23,7 @@ import {
 	confirm,
 	heading,
 	info,
+	resetPrompt,
 	step,
 	success,
 	warn,
@@ -229,6 +230,13 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 		warn(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
 		info("You can try again later with 'fixbot login'");
 		return { provider: providerId, saved: false };
+	} finally {
+		// Upstream OAuthCallbackFlow.#waitForCallback races a browser callback
+		// against a while(true) manual-input loop. When the browser wins, the
+		// loop leaves an orphaned ask() queued on the shared readline.  Close
+		// and recreate the readline to flush it — otherwise the orphaned prompt
+		// steals the next user input and the wizard hangs.
+		resetPrompt();
 	}
 }
 
