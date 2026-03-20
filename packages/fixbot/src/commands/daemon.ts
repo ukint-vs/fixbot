@@ -15,7 +15,7 @@ export default class Daemon extends Command {
 	};
 
 	static flags = {
-		config: Flags.string({ description: "Path to daemon config file" }),
+		config: Flags.string({ description: "Path to daemon config file", required: true }),
 		foreground: Flags.boolean({ description: "Run daemon in foreground (start only)" }),
 		job: Flags.string({ description: "Path to job spec JSON file (enqueue only)" }),
 	};
@@ -23,17 +23,15 @@ export default class Daemon extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Daemon);
 		const action = args.action as DaemonAction;
-		const configPath = flags.config;
+		const configPath = flags.config!;
 
 		switch (action) {
 			case "start": {
 				const { runDaemonFromConfigFile, startDaemonInBackground } = await import("../daemon/service");
-				const { loadDaemonConfig } = await import("../config");
-				const config = loadDaemonConfig(configPath);
 				if (flags.foreground) {
 					await runDaemonFromConfigFile(configPath);
 				} else {
-					await startDaemonInBackground(config);
+					await startDaemonInBackground(configPath);
 				}
 				break;
 			}
@@ -45,15 +43,15 @@ export default class Daemon extends Command {
 			case "status": {
 				const { getDaemonStatusFromConfigFile } = await import("../daemon/service");
 				const { renderDaemonStatus } = await import("../daemon/status-store");
-				const status = await getDaemonStatusFromConfigFile(configPath);
-				console.log(renderDaemonStatus(status));
+				const { status, issues } = await getDaemonStatusFromConfigFile(configPath);
+				console.log(renderDaemonStatus(status, issues));
 				break;
 			}
 			case "health": {
 				const { getDaemonStatusFromConfigFile } = await import("../daemon/service");
-				const status = await getDaemonStatusFromConfigFile(configPath);
-				const isHealthy = status.lifecycle === "idle" || status.lifecycle === "running";
-				console.log(isHealthy ? "healthy" : `unhealthy: ${status.lifecycle}`);
+				const { status } = await getDaemonStatusFromConfigFile(configPath);
+				const isHealthy = status.state === "idle" || status.state === "running";
+				console.log(isHealthy ? "healthy" : `unhealthy: ${status.state}`);
 				process.exitCode = isHealthy ? 0 : 1;
 				break;
 			}
@@ -63,7 +61,7 @@ export default class Daemon extends Command {
 					throw new Error("--job flag is required for enqueue action");
 				}
 				const { enqueueDaemonJobFromFile, renderDaemonEnqueueSummary } = await import("../daemon/enqueue");
-				const result = await enqueueDaemonJobFromFile(jobPath, configPath);
+				const result = await enqueueDaemonJobFromFile(configPath, jobPath);
 				console.log(renderDaemonEnqueueSummary(result));
 				break;
 			}
