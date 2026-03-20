@@ -125,13 +125,12 @@ describe("daemon command dispatch", () => {
 			};
 			try {
 				await runDaemonCommand(["health", "--config", configPath]);
+				expect(logs[0]).toMatch(/^unhealthy:/);
+				expect(process.exitCode).toBe(1);
 			} finally {
 				console.log = originalLog;
+				process.exitCode = originalExitCode;
 			}
-
-			expect(logs[0]).toMatch(/^unhealthy:/);
-			expect(process.exitCode).toBe(1);
-			process.exitCode = originalExitCode;
 		});
 
 		it("reports healthy when daemon is idle", async () => {
@@ -161,13 +160,12 @@ describe("daemon command dispatch", () => {
 			};
 			try {
 				await runDaemonCommand(["health", "--config", configPath]);
+				expect(logs[0]).toBe("healthy");
+				expect(process.exitCode).toBe(0);
 			} finally {
 				console.log = originalLog;
+				process.exitCode = originalExitCode;
 			}
-
-			expect(logs[0]).toBe("healthy");
-			expect(process.exitCode).toBe(0);
-			process.exitCode = originalExitCode;
 
 			controller.abort();
 			await daemonPromise;
