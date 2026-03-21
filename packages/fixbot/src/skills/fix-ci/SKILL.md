@@ -34,6 +34,6 @@ Use this skill only for a single failing CI run in the current repository clone.
 
 End with exactly one line for each marker:
 
-- `GITFIX_RESULT: success` or `GITFIX_RESULT: failed`
-- `GITFIX_SUMMARY: <single-line summary>`
-- `GITFIX_FAILURE_REASON: <reason or none>`
+- `FIXBOT_RESULT: success` or `FIXBOT_RESULT: failed`
+- `FIXBOT_SUMMARY: <single-line summary>`
+- `FIXBOT_FAILURE_REASON: <reason or none>`

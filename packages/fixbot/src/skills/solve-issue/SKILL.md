@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Solve Issue
 
-Use this skill only for a single GitHub issue. Implement only the minimum change required to address the issue — bugfix or bounded small feature. Do not refactor unrelated code. If the fix requires more than a bounded implementation, explain why and return GITFIX_RESULT: failed.
+Use this skill only for a single GitHub issue. Implement only the minimum change required to address the issue — bugfix or bounded small feature. Do not refactor unrelated code. If the fix requires more than a bounded implementation, explain why and return FIXBOT_RESULT: failed.
 
 ## Goals
 
@@ -36,6 +36,6 @@ Use this skill only for a single GitHub issue. Implement only the minimum change
 
 End with exactly one line for each marker:
 
-- `GITFIX_RESULT: success` or `GITFIX_RESULT: failed`
-- `GITFIX_SUMMARY: <single-line summary>`
-- `GITFIX_FAILURE_REASON: <reason or none>`
+- `FIXBOT_RESULT: success` or `FIXBOT_RESULT: failed`
+- `FIXBOT_SUMMARY: <single-line summary>`
+- `FIXBOT_FAILURE_REASON: <reason or none>`

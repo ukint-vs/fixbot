@@ -37,6 +37,6 @@ Use this skill to resolve lint errors and warnings in the current repository clo
 
 End with exactly one line for each marker:
 
-- `GITFIX_RESULT: success` or `GITFIX_RESULT: failed`
-- `GITFIX_SUMMARY: <single-line summary>`
-- `GITFIX_FAILURE_REASON: <reason or none>`
+- `FIXBOT_RESULT: success` or `FIXBOT_RESULT: failed`
+- `FIXBOT_SUMMARY: <single-line summary>`
+- `FIXBOT_FAILURE_REASON: <reason or none>`

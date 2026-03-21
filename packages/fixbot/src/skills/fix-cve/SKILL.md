@@ -6,7 +6,7 @@ disable-model-invocation: true
 
 # Fix CVE
 
-Use this skill only for remediating a single CVE by updating the vulnerable dependency. Do not make unrelated changes. If the update cannot be completed safely, explain why and return GITFIX_RESULT: failed.
+Use this skill only for remediating a single CVE by updating the vulnerable dependency. Do not make unrelated changes. If the update cannot be completed safely, explain why and return FIXBOT_RESULT: failed.
 
 ## Goals
 
@@ -38,6 +38,6 @@ Use this skill only for remediating a single CVE by updating the vulnerable depe
 
 End with exactly one line for each marker:
 
-- `GITFIX_RESULT: success` or `GITFIX_RESULT: failed`
-- `GITFIX_SUMMARY: <single-line summary>`
-- `GITFIX_FAILURE_REASON: <reason or none>`
+- `FIXBOT_RESULT: success` or `FIXBOT_RESULT: failed`
+- `FIXBOT_SUMMARY: <single-line summary>`
+- `FIXBOT_FAILURE_REASON: <reason or none>`

@@ -41,6 +41,6 @@ Use this skill to diagnose and repair failing tests in the current repository cl
 
 End with exactly one line for each marker:
 
-- `GITFIX_RESULT: success` or `GITFIX_RESULT: failed`
-- `GITFIX_SUMMARY: <single-line summary>`
-- `GITFIX_FAILURE_REASON: <reason or none>`
+- `FIXBOT_RESULT: success` or `FIXBOT_RESULT: failed`
+- `FIXBOT_SUMMARY: <single-line summary>`
+- `FIXBOT_FAILURE_REASON: <reason or none>`
