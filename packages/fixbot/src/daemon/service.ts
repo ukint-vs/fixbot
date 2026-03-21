@@ -246,7 +246,7 @@ async function waitForDaemonReady(config: NormalizedDaemonConfigV1, timeoutMs: n
 	while (Date.now() < deadline) {
 		const inspection = inspectDaemon(config);
 		latestStatus = inspection.status;
-		if (inspection.processRunning && (latestStatus.state === "idle" || latestStatus.state === "running")) {
+		if (inspection.processRunning && (latestStatus.state === "idle" || latestStatus.state === "running" || latestStatus.state === "degraded")) {
 			return latestStatus;
 		}
 		if (latestStatus.state === "error") {

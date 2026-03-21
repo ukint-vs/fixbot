@@ -18,7 +18,7 @@ import {
 	countChangedFilesFromStatus,
 	getHeadCommit,
 } from "./git";
-import { resolveExecutionModel, resolveHostAgentConfig, type ResolveExecutionModelOptions } from "./host-agent";
+import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
 import { assertDockerImageReady } from "./image";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
 import {

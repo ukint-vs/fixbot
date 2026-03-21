@@ -91,9 +91,9 @@ export async function resolveExecutionModel(
 		if (configMatch) {
 			return configMatch as Model<Api>;
 		}
-		// Warn but don't throw — fall through to provider default
-		console.warn(
-			`[fixbot] config model ${cm.provider}/${cm.modelId} not available, falling back to provider default`,
+		throw new Error(
+			`Config model ${cm.provider}/${cm.modelId} is not available. ` +
+			`Check that the provider is authenticated ('fixbot login') and the model ID is correct.`,
 		);
 	}
 

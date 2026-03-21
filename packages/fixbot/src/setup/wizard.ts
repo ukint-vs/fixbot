@@ -331,34 +331,47 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 		isDefault: boolean;
 	}
 
+	// Prioritize the provider chosen in step 1; show other providers only if user asks
+	const chosenProvider = providerResult.provider !== "none" ? providerResult.provider : undefined;
+	const primaryProviders = chosenProvider ? providers.filter((p) => p === chosenProvider) : providers;
+	const otherProviders = chosenProvider ? providers.filter((p) => p !== chosenProvider) : [];
+
 	const options: ModelOption[] = [];
-	for (const provider of providers) {
-		const defaultId = providerDefaults[provider as KnownProvider];
-		const providerModels = available.filter((m) => m.provider === provider);
-		const defaultModel = providerModels.find((m) => m.id === defaultId);
-		if (defaultModel) {
-			options.push({
-				id: `${provider}/${defaultModel.id}`,
-				provider,
-				modelId: defaultModel.id,
-				label: `${defaultModel.id} [${provider}] (recommended)`,
-				isDefault: true,
-			});
+	function addModelsForProviders(providerList: string[]): void {
+		for (const provider of providerList) {
+			const defaultId = providerDefaults[provider as KnownProvider];
+			const providerModels = available.filter((m) => m.provider === provider);
+			const defaultModel = providerModels.find((m) => m.id === defaultId);
+			if (defaultModel) {
+				options.push({
+					id: `${provider}/${defaultModel.id}`,
+					provider,
+					modelId: defaultModel.id,
+					label: `${defaultModel.id} [${provider}] (recommended)`,
+					isDefault: true,
+				});
+			}
+			// Add a few notable non-default models
+			for (const m of providerModels.filter((m) => m.id !== defaultId).slice(0, 5)) {
+				options.push({
+					id: `${provider}/${m.id}`,
+					provider,
+					modelId: m.id,
+					label: `${m.id} [${provider}]`,
+					isDefault: false,
+				});
+			}
 		}
 	}
 
-	// Add a few notable non-default models from each provider
-	for (const provider of providers) {
-		const defaultId = providerDefaults[provider as KnownProvider];
-		const providerModels = available.filter((m) => m.provider === provider && m.id !== defaultId);
-		for (const m of providerModels.slice(0, 5)) {
-			options.push({
-				id: `${provider}/${m.id}`,
-				provider,
-				modelId: m.id,
-				label: `${m.id} [${provider}]`,
-				isDefault: false,
-			});
+	addModelsForProviders(primaryProviders);
+	const primaryCount = options.length;
+
+	// If other providers have models, offer them as an expandable section
+	if (otherProviders.length > 0) {
+		const otherAvailable = available.filter((m) => otherProviders.includes(m.provider));
+		if (otherAvailable.length > 0) {
+			addModelsForProviders(otherProviders);
 		}
 	}
 
@@ -367,9 +380,12 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 		return undefined;
 	}
 
-	// Show numbered list
+	// Show numbered list — primary provider first, then others separated
 	console.log();
 	for (let i = 0; i < options.length; i++) {
+		if (i === primaryCount && primaryCount > 0) {
+			console.log("  --- other providers ---");
+		}
 		console.log(`  ${String(i + 1).padStart(3, " ")}. ${options[i].label}`);
 	}
 	console.log(`  ${String(options.length + 1).padStart(3, " ")}. Skip — use provider default\n`);
