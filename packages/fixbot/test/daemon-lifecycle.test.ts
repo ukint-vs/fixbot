@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, describe, expect, it } from "bun:test";
+import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonStatus, loadDaemonConfig } from "../src/config";
 import { normalizeJobSpec } from "../src/contracts";
 import { createDaemonJobEnvelope, enqueueDaemonJobFromFile } from "../src/daemon/enqueue";
@@ -267,7 +268,7 @@ describe("daemon lifecycle", () => {
 		await stopDaemonFromConfigFile(configPath);
 	});
 
-	it("surfaces orphaned active spool files through degraded status at startup", async () => {
+	it("re-queues orphaned active spool files at startup and processes them", async () => {
 		const configPath = createTempConfig({
 			heartbeatIntervalMs: 75,
 			idleSleepMs: 20,
@@ -297,30 +298,119 @@ describe("daemon lifecycle", () => {
 			"utf-8",
 		);
 
-		// Start the daemon in-process; startup reconciliation should detect the orphaned file.
+		// Start the daemon with a canned runner so the re-queued orphan is processed.
+		const controller = new AbortController();
+		const daemonRun = runDaemon(config, {
+			signal: controller.signal,
+			installSignalHandlers: false,
+			jobRunner: makeCannedRunner("orphan re-queued and processed"),
+		});
+
+		// Wait for the daemon to process the re-queued orphan (it should appear in recentResults).
+		const status = await waitFor(
+			() => readDaemonStatusFile(config),
+			(s) =>
+				s !== undefined &&
+				s.pid === process.pid &&
+				s.state === "idle" &&
+				s.recentResults.length > 0,
+			5_000,
+		);
+
+		controller.abort();
+		await daemonRun;
+
+		// The orphan was re-queued, claimed, and processed.
+		expect(status?.recentResults[0]?.jobId).toBe("orphan-job-001");
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		expect(activeFiles).toEqual([]);
+	});
+
+	it("cleans up completed orphan with existing result artifacts instead of re-queuing", async () => {
+		const configPath = createTempConfig({
+			heartbeatIntervalMs: 75,
+			idleSleepMs: 20,
+		});
+		const config = loadDaemonConfig(configPath);
+		ensureDaemonStateDirectories(config);
+
+		// Write an orphaned active-spool file for a job that already completed.
+		const orphanEnvelope = createDaemonJobEnvelope(config, {
+			version: "fixbot.job/v1" as const,
+			jobId: "completed-orphan-001",
+			taskClass: "fix_ci" as const,
+			repo: { url: "https://github.com/example/repo.git", baseBranch: "main" },
+			fixCi: { githubActionsRunId: 88888 },
+			execution: {
+				mode: "process" as const,
+				timeoutMs: 120_000,
+				memoryLimitMb: 2_048,
+				sandbox: { mode: "workspace-write" as const, networkAccess: true },
+			},
+		});
+		const activeDir = join(config.paths.stateDir, "active");
+		mkdirSync(activeDir, { recursive: true });
+		writeFileSync(
+			join(activeDir, "completed-orphan-001-abcdef1234.json"),
+			`${JSON.stringify(orphanEnvelope, null, 2)}\n`,
+			"utf-8",
+		);
+
+		// Simulate that the job already completed by writing its result file.
+		const artifactPaths = getArtifactPaths(config.paths.resultsDir, "completed-orphan-001");
+		mkdirSync(artifactPaths.artifactDir, { recursive: true });
+		writeFileSync(artifactPaths.resultFile, "{}\n", "utf-8");
+
 		const controller = new AbortController();
 		const daemonRun = runDaemon(config, {
 			signal: controller.signal,
 			installSignalHandlers: false,
 		});
 
-		// Wait for the daemon to write its first status (starting or idle with our pid).
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status !== undefined && status.pid === process.pid,
+			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
 			5_000,
 		);
-
-		const runningStatus = await getDaemonStatusFromConfigFile(configPath);
 
 		controller.abort();
 		await daemonRun;
 
-		// The orphan should have been detected and reported either as ORPHANED_ACTIVE_JOB error
-		// or as degraded state (the daemon transitions starting→degraded→idle as it processes the orphan).
-		expect(
-			runningStatus.status.lastError?.code === "ORPHANED_ACTIVE_JOB" || runningStatus.status.state === "degraded",
-		).toBe(true);
+		// The orphan should have been cleaned up (deleted), NOT re-queued.
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		expect(activeFiles).toEqual([]);
+		const queueDir = join(config.paths.stateDir, "queue");
+		const queueFiles = existsSync(queueDir) ? readdirSync(queueDir).filter((f) => f.endsWith(".json")) : [];
+		expect(queueFiles).toEqual([]);
+	});
+
+	it("foreground logger callback receives startup log messages", async () => {
+		const configPath = createTempConfig({
+			heartbeatIntervalMs: 75,
+			idleSleepMs: 20,
+		});
+		const config = loadDaemonConfig(configPath);
+
+		const logMessages: string[] = [];
+		const controller = new AbortController();
+		const daemonRun = runDaemon(config, {
+			signal: controller.signal,
+			installSignalHandlers: false,
+			logger: (msg) => logMessages.push(msg),
+		});
+
+		await waitFor(
+			() => readDaemonStatusFile(config),
+			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
+			5_000,
+		);
+
+		controller.abort();
+		await daemonRun;
+
+		// The logger should have received at least one message (the startup state log).
+		expect(logMessages.length).toBeGreaterThan(0);
+		expect(logMessages.some((msg) => msg.includes("state="))).toBe(true);
 	});
 
 	it("reflects updated queue depth and preview immediately after enqueue without waiting for heartbeat", async () => {
@@ -426,7 +516,7 @@ describe("daemon lifecycle", () => {
 		await daemon2;
 	});
 
-	it("crash-orphaned active job is detected as ORPHANED_ACTIVE_JOB on daemon restart", async () => {
+	it("crash-orphaned active job is re-queued and processed on daemon restart", async () => {
 		const configPath = createTempConfig({
 			heartbeatIntervalMs: 75,
 			idleSleepMs: 20,
@@ -446,29 +536,32 @@ describe("daemon lifecycle", () => {
 			"utf-8",
 		);
 
-		// Simulate a restart: start a fresh in-process daemon that discovers the orphan at startup
+		// Simulate a restart with a canned runner so the re-queued orphan is processed.
 		const controller = new AbortController();
 		const daemonRun = runDaemon(config, {
 			signal: controller.signal,
 			installSignalHandlers: false,
+			jobRunner: makeCannedRunner("restart orphan processed"),
 		});
 
-		// Wait for the daemon to write status with our pid
-		await waitFor(
+		// Wait for the daemon to process the re-queued orphan.
+		const status = await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status !== undefined && status.pid === process.pid,
+			(s) =>
+				s !== undefined &&
+				s.pid === process.pid &&
+				s.state === "idle" &&
+				s.recentResults.length > 0,
 			5_000,
 		);
-
-		const statusResult = await getDaemonStatusFromConfigFile(configPath);
 
 		controller.abort();
 		await daemonRun;
 
-		// The orphan should have been detected and reported
-		expect(
-			statusResult.status.lastError?.code === "ORPHANED_ACTIVE_JOB" || statusResult.status.state === "degraded",
-		).toBe(true);
+		// The orphan was re-queued and processed — active dir should be clean.
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		expect(activeFiles).toEqual([]);
+		expect(status?.recentResults[0]?.jobId).toBe("restart-orphan-001");
 	});
 
 	it("recentResults from real job execution survive a full stop/start cycle", async () => {

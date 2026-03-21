@@ -56,6 +56,7 @@ export {
 	listOrphanedActiveDaemonJobs,
 	listQueuedDaemonJobs,
 	removeActiveDaemonJob,
+	requeueOrphanedDaemonJob,
 } from "./daemon/job-store";
 export type {
 	DaemonJobRunner,
