@@ -4,9 +4,9 @@ import {
 	buildGitHubJobSpec,
 	deriveGitHubJobId,
 	type GitHubEnqueueFn,
-	parseGitHubRepoPath,
 	pollGitHubRepos,
 } from "../src/daemon/github-poller";
+import { parseOwnerRepo } from "../src/daemon/github-reporter";
 import { DuplicateDaemonJobError } from "../src/daemon/job-store";
 import type { DaemonJobEnvelopeV1, NormalizedDaemonGitHubConfig } from "../src/types";
 
@@ -55,34 +55,34 @@ const RESULTS_DIR = "/tmp/fixbot-test-results";
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("parseGitHubRepoPath", () => {
+describe("parseOwnerRepo", () => {
 	it("handles plain https URL", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with .git suffix", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo.git")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo.git")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with trailing slash", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo/")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo/")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with .git and trailing slash", () => {
 		// .git before trailing slash — strip trailing slash first then .git
-		expect(parseGitHubRepoPath("https://github.com/owner/repo.git/")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo.git/")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("throws on invalid URL with too many segments", () => {
-		expect(() => parseGitHubRepoPath("https://github.com/a/b/c")).toThrow("exactly owner/repo");
+		expect(() => parseOwnerRepo("https://github.com/a/b/c")).toThrow("exactly owner/repo");
 	});
 
 	it("throws on invalid URL with too few segments", () => {
-		expect(() => parseGitHubRepoPath("https://github.com/owner")).toThrow("exactly owner/repo");
+		expect(() => parseOwnerRepo("https://github.com/owner")).toThrow("exactly owner/repo");
 	});
 
 	it("throws on non-URL string", () => {
-		expect(() => parseGitHubRepoPath("not-a-url")).toThrow("Invalid GitHub repo URL");
+		expect(() => parseOwnerRepo("not-a-url")).toThrow("Expected owner/repo format");
 	});
 });
 
