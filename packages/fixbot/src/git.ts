@@ -44,10 +44,28 @@ export async function captureGitStatus(workspaceDir: string, gitStatusFile: stri
 }
 
 export function countChangedFilesFromStatus(statusText: string): number {
+	// Count uncommitted working-tree changes from `git status --short`
 	return statusText
 		.split(/\r?\n/)
 		.map((line) => line.trim())
 		.filter((line) => line !== "" && !line.startsWith("##")).length;
+}
+
+/**
+ * Count files changed between baseCommit and HEAD (committed changes).
+ * Falls back to 0 on error.
+ */
+export async function countCommittedChangedFiles(workspaceDir: string, baseCommit: string): Promise<number> {
+	try {
+		const result = await spawnCommandOrThrow(
+			"git",
+			["diff", "--name-only", baseCommit, "HEAD"],
+			{ cwd: workspaceDir },
+		);
+		return result.stdout.split(/\r?\n/).filter((line) => line.trim() !== "").length;
+	} catch {
+		return 0;
+	}
 }
 
 export function copyOptionalWorkspaceArtifact(

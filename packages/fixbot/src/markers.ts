@@ -1,8 +1,9 @@
 import type { ParsedResultMarkers, ResultStatus } from "./types";
 
-const RESULT_PATTERN = /^GITFIX_RESULT:\s*(success|failed)\s*$/m;
-const SUMMARY_PATTERN = /^GITFIX_SUMMARY:\s*(.+)\s*$/m;
-const FAILURE_REASON_PATTERN = /^GITFIX_FAILURE_REASON:\s*(.+)\s*$/m;
+// Accept both rebranded FIXBOT_ and legacy GITFIX_ prefixes for backward compatibility.
+const RESULT_PATTERN = /^(?:FIXBOT|GITFIX)_RESULT:\s*(success|failed)\s*$/m;
+const SUMMARY_PATTERN = /^(?:FIXBOT|GITFIX)_SUMMARY:\s*(.+)\s*$/m;
+const FAILURE_REASON_PATTERN = /^(?:FIXBOT|GITFIX)_FAILURE_REASON:\s*(.+)\s*$/m;
 
 export function parseResultMarkers(text: string): ParsedResultMarkers {
 	const resultMatch = RESULT_PATTERN.exec(text);
@@ -28,7 +29,10 @@ function firstUsefulLine(text: string): string | undefined {
 				line !== "" &&
 				!line.startsWith("GITFIX_RESULT:") &&
 				!line.startsWith("GITFIX_SUMMARY:") &&
-				!line.startsWith("GITFIX_FAILURE_REASON:"),
+				!line.startsWith("GITFIX_FAILURE_REASON:") &&
+				!line.startsWith("FIXBOT_RESULT:") &&
+				!line.startsWith("FIXBOT_SUMMARY:") &&
+				!line.startsWith("FIXBOT_FAILURE_REASON:"),
 		);
 }
 

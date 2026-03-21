@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { DEFAULT_MODEL_PER_PROVIDER, type Api, type KnownProvider, type Model } from "@oh-my-pi/pi-ai";
 import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
-import type { ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
+import type { DaemonModelConfig, ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
 
 export interface HostAgentConfig {
 	hostAgentDir: string;
@@ -16,6 +16,8 @@ export interface HostAgentConfig {
 export interface ResolveExecutionModelOptions {
 	authStorage?: AuthStorage;
 	modelRegistry?: ModelRegistry;
+	/** Model override from daemon config — takes precedence over provider defaults. */
+	configModel?: DaemonModelConfig;
 }
 
 function isExistingDirectory(path: string): boolean {
@@ -77,9 +79,26 @@ export async function resolveExecutionModel(
 		return model as Model<Api>;
 	}
 
+	// Priority: job override (above) → config model → provider default → first available
+	const available = modelRegistry.getAvailable();
+
+	// Config-level model override from daemon.config.json
+	if (options.configModel) {
+		const cm = options.configModel;
+		const configMatch = available.find(
+			(m) => m.provider === cm.provider && m.id === cm.modelId,
+		);
+		if (configMatch) {
+			return configMatch as Model<Api>;
+		}
+		throw new Error(
+			`Config model ${cm.provider}/${cm.modelId} is not available. ` +
+			`Check that the provider is authenticated ('fixbot login') and the model ID is correct.`,
+		);
+	}
+
 	// Prefer a provider's known-good default, iterating by provider priority
 	// (same order as coding-agent's model-resolver) rather than models.json insertion order
-	const available = modelRegistry.getAvailable();
 	const selected = (Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]).reduce<Model<Api> | undefined>(
 		(found, provider) => {
 			if (found) return found;

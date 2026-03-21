@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -622,7 +622,7 @@ describe("daemon enqueue", () => {
 		]);
 	});
 
-	it("surfaces orphaned active spool files as degraded state after a restart", async () => {
+	it("re-queues orphaned active spool files at startup for retry", async () => {
 		const configPath = createTempConfig({
 			heartbeatIntervalMs: 75,
 			idleSleepMs: 20,
@@ -666,24 +666,20 @@ describe("daemon enqueue", () => {
 			"utf-8",
 		);
 
-		// Start the daemon — it should detect the orphan and surface it.
+		// Start the daemon — it should detect the orphan and re-queue it.
 		const daemon = await startForegroundDaemon(configPath, async (job, options) =>
 			createFakeJobResult(job, options.resultsDir),
 		);
 
-		// Wait for the daemon to finish startup and surface the orphan state.
-		const orphanStatus = await waitFor(
+		// Wait for the daemon to reach idle state.
+		await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) =>
-				status !== undefined &&
-				status.pid === process.pid &&
-				(status.state === "degraded" ||
-					(status.lastError !== null && status.lastError?.code === "ORPHANED_ACTIVE_JOB")),
+			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
 			5_000,
 		);
 
-		expect(orphanStatus).not.toBeNull();
-		expect(orphanStatus?.lastError?.code).toBe("ORPHANED_ACTIVE_JOB");
-		expect(orphanStatus?.lastError?.message).toContain(orphanJobId);
+		// The orphan should have been moved from active/ to queue/ (and then processed by the daemon).
+		const activeFiles = readdirSync(storePaths.activeDir).filter((f) => f.endsWith(".json"));
+		expect(activeFiles).toEqual([]);
 	});
 });

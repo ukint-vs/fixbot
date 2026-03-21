@@ -66,6 +66,7 @@ const commands: CommandEntry[] = [
 	{ name: "agents", load: () => import("./commands/agents").then(m => m.default) },
 	{ name: "commit", load: () => import("./commands/commit").then(m => m.default) },
 	{ name: "config", load: () => import("./commands/config").then(m => m.default) },
+	{ name: "__internal-run", load: fixbotCommand("../../fixbot/src/commands/internal-run", "Execute a prepared fixbot job (internal)") },
 	{ name: "daemon", load: fixbotCommand("../../fixbot/src/commands/daemon", "Manage the fixbot daemon") },
 	{ name: "grep", load: () => import("./commands/grep").then(m => m.default) },
 	{ name: "init", load: fixbotCommand("../../fixbot/src/commands/init", "Interactive setup wizard for fixbot daemon") },

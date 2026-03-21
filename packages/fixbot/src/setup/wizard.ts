@@ -11,8 +11,8 @@
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import { AuthCredentialStore, getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
-import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
+import { AuthCredentialStore, DEFAULT_MODEL_PER_PROVIDER, getOAuthProviders, type KnownProvider, type OAuthProviderId } from "@oh-my-pi/pi-ai";
+import { discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils";
 import {
 	ask,
@@ -85,7 +85,7 @@ const FEATURED_OAUTH_PROVIDERS = [
 	"cursor",
 ];
 
-const TOTAL_STEPS = 5;
+const TOTAL_STEPS = 6;
 
 // All prompts use the shared readline from prompt.ts to avoid stdin conflicts
 // between competing readline instances (which causes the wizard to hang).
@@ -284,7 +284,132 @@ async function saveApiKeyToStore(provider: string, apiKey: string): Promise<void
 }
 
 // ---------------------------------------------------------------------------
-// Step 2: GitHub Token
+// Step 2: Model Selection
+// ---------------------------------------------------------------------------
+
+interface ModelChoice {
+	provider: string;
+	modelId: string;
+}
+
+/**
+ * Presents available models from the authenticated providers and lets the user
+ * pick one. Falls back to the provider default if skipped.
+ */
+async function setupModel(providerResult: { provider: string; saved: boolean }): Promise<ModelChoice | undefined> {
+	step(2, TOTAL_STEPS, "Model Selection");
+
+	info("Which AI model should fixbot use for code analysis and fixes?");
+
+	let authStorage;
+	try {
+		authStorage = await discoverAuthStorage();
+	} catch {
+		warn("Could not open credential store — using provider default.");
+		return undefined;
+	}
+
+	const registry = new ModelRegistry(authStorage);
+	await registry.refresh();
+	const available = registry.getAvailable();
+
+	if (available.length === 0) {
+		warn("No authenticated models found — the daemon will use the provider default after login.");
+		return undefined;
+	}
+
+	// Group by provider and pick the top models (prefer defaults)
+	const providerDefaults = DEFAULT_MODEL_PER_PROVIDER;
+	const providers = [...new Set(available.map((m) => m.provider))];
+
+	// Build a curated choice list: provider defaults first, then everything else
+	interface ModelOption {
+		id: string;
+		provider: string;
+		modelId: string;
+		label: string;
+		isDefault: boolean;
+	}
+
+	// Prioritize the provider chosen in step 1; show other providers only if user asks
+	const chosenProvider = providerResult.provider !== "none" ? providerResult.provider : undefined;
+	const primaryProviders = chosenProvider ? providers.filter((p) => p === chosenProvider) : providers;
+	const otherProviders = chosenProvider ? providers.filter((p) => p !== chosenProvider) : [];
+
+	const options: ModelOption[] = [];
+	function addModelsForProviders(providerList: string[]): void {
+		for (const provider of providerList) {
+			const defaultId = providerDefaults[provider as KnownProvider];
+			const providerModels = available.filter((m) => m.provider === provider);
+			const defaultModel = providerModels.find((m) => m.id === defaultId);
+			if (defaultModel) {
+				options.push({
+					id: `${provider}/${defaultModel.id}`,
+					provider,
+					modelId: defaultModel.id,
+					label: `${defaultModel.id} [${provider}] (recommended)`,
+					isDefault: true,
+				});
+			}
+			// Add a few notable non-default models
+			for (const m of providerModels.filter((m) => m.id !== defaultId).slice(0, 5)) {
+				options.push({
+					id: `${provider}/${m.id}`,
+					provider,
+					modelId: m.id,
+					label: `${m.id} [${provider}]`,
+					isDefault: false,
+				});
+			}
+		}
+	}
+
+	addModelsForProviders(primaryProviders);
+	const primaryCount = options.length;
+
+	// If other providers have models, offer them as an expandable section
+	if (otherProviders.length > 0) {
+		const otherAvailable = available.filter((m) => otherProviders.includes(m.provider));
+		if (otherAvailable.length > 0) {
+			addModelsForProviders(otherProviders);
+		}
+	}
+
+	if (options.length === 0) {
+		warn("No models available — using provider default.");
+		return undefined;
+	}
+
+	// Show numbered list — primary provider first, then others separated
+	console.log();
+	for (let i = 0; i < options.length; i++) {
+		if (i === primaryCount && primaryCount > 0) {
+			console.log("  --- other providers ---");
+		}
+		console.log(`  ${String(i + 1).padStart(3, " ")}. ${options[i].label}`);
+	}
+	console.log(`  ${String(options.length + 1).padStart(3, " ")}. Skip — use provider default\n`);
+
+	const answer = await ask(`  Select model [1-${options.length + 1}]: `);
+	const index = Number.parseInt(answer, 10) - 1;
+
+	if (Number.isNaN(index) || index < 0 || index > options.length) {
+		info("Using provider default.");
+		return undefined;
+	}
+
+	if (index === options.length) {
+		info("Using provider default.");
+		return undefined;
+	}
+
+	const picked = options[index];
+	success(`Selected model: ${picked.provider}/${picked.modelId}`);
+	return { provider: picked.provider, modelId: picked.modelId };
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: GitHub Token
 // ---------------------------------------------------------------------------
 
 interface GitHubTokenResult {
@@ -293,7 +418,7 @@ interface GitHubTokenResult {
 }
 
 async function setupGitHubToken(): Promise<GitHubTokenResult> {
-	step(2, TOTAL_STEPS, "GitHub Token");
+	step(3, TOTAL_STEPS, "GitHub Token");
 
 	info("fixbot needs a GitHub token to:");
 	console.log("    - Clone private repositories");
@@ -342,7 +467,7 @@ interface RepoConfig {
 }
 
 async function setupRepos(): Promise<RepoConfig[]> {
-	step(3, TOTAL_STEPS, "Repositories to Watch");
+	step(4, TOTAL_STEPS, "Repositories to Watch");
 
 	info("Which GitHub repos should the daemon monitor for issues?");
 	info("Add a trigger label to any issue to queue a fix.\n");
@@ -390,8 +515,9 @@ interface GeneratedConfig {
 async function generateDaemonConfig(
 	githubToken: string | undefined,
 	repos: RepoConfig[],
+	modelChoice?: ModelChoice,
 ): Promise<GeneratedConfig> {
-	step(4, TOTAL_STEPS, "Generate Daemon Config");
+	step(5, TOTAL_STEPS, "Generate Daemon Config");
 
 	const defaultDir = join(homedir(), ".fixbot");
 	const configDir = await askWithDefault("Config directory", defaultDir);
@@ -430,6 +556,13 @@ async function generateDaemonConfig(
 		config.github = github;
 	}
 
+	if (modelChoice) {
+		config.model = {
+			provider: modelChoice.provider,
+			modelId: modelChoice.modelId,
+		};
+	}
+
 	// Write config
 	for (const dir of [configDir, stateDir, resultsDir]) {
 		if (!existsSync(dir)) {
@@ -453,7 +586,7 @@ async function verify(
 	repos: RepoConfig[],
 	configResult: GeneratedConfig,
 ): Promise<void> {
-	step(5, TOTAL_STEPS, "Verify Setup");
+	step(6, TOTAL_STEPS, "Verify Setup");
 
 	let issues = 0;
 
@@ -555,9 +688,10 @@ export async function runSetupWizard(): Promise<void> {
 
 	try {
 		const providerResult = await setupAiProvider();
+		const modelChoice = await setupModel(providerResult);
 		const githubResult = await setupGitHubToken();
 		const repos = await setupRepos();
-		const configResult = await generateDaemonConfig(githubResult.token, repos);
+		const configResult = await generateDaemonConfig(githubResult.token, repos, modelChoice);
 		await verify(providerResult, githubResult, repos, configResult);
 	} finally {
 		closePrompt();

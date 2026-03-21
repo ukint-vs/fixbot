@@ -24,6 +24,7 @@ import {
 	listOrphanedActiveDaemonJobs,
 	listQueuedDaemonJobs,
 	removeActiveDaemonJob,
+	requeueOrphanedDaemonJob,
 } from "./job-store";
 import {
 	cleanupDaemonRuntimeFiles,
@@ -245,7 +246,7 @@ async function waitForDaemonReady(config: NormalizedDaemonConfigV1, timeoutMs: n
 	while (Date.now() < deadline) {
 		const inspection = inspectDaemon(config);
 		latestStatus = inspection.status;
-		if (inspection.processRunning && (latestStatus.state === "idle" || latestStatus.state === "running")) {
+		if (inspection.processRunning && (latestStatus.state === "idle" || latestStatus.state === "running" || latestStatus.state === "degraded")) {
 			return latestStatus;
 		}
 		if (latestStatus.state === "error") {
@@ -395,6 +396,7 @@ async function runClaimedDaemonJob(
 	try {
 		const result = await jobRunner(claimed.envelope.job, {
 			resultsDir: config.paths.resultsDir,
+			configModel: config.model,
 		});
 		removeActiveDaemonJob(config, claimed.envelope.jobId);
 		const recentResults = appendRecentResult(
@@ -550,8 +552,8 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 	// Seed recentResults and queue preview from the durable status snapshot so they survive a stop/start cycle.
 	const priorStatus = readDaemonStatusFile(config);
 	const seededRecentResults = priorStatus?.recentResults ?? [];
-	const spoolQueueAtStart = buildQueueStatusFromSpool(config);
-	const orphansAtStart = listOrphanedActiveDaemonJobs(config, undefined).map((r) => r.envelope.jobId);
+	let spoolQueueAtStart = buildQueueStatusFromSpool(config);
+	const orphansAtStart = listOrphanedActiveDaemonJobs(config, undefined);
 
 	let currentStatus = createDaemonStatus(config, {
 		state: "starting",
@@ -563,10 +565,35 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 		recentResults: seededRecentResults,
 	});
 
-	// If orphaned active spool files exist at startup, surface them before transitioning to idle.
+	// Recover orphaned active spool files left behind by a crashed daemon.
+	let orphanRecoveryFailed = false;
 	if (orphansAtStart.length > 0) {
-		currentStatus = mergeSpoolReconciliation(config, currentStatus, spoolQueueAtStart, orphansAtStart);
-		renderLog(logger, `orphaned active jobs detected at startup: ${orphansAtStart.join(", ")}`);
+		let recoveryError: DaemonErrorSummary | undefined;
+		for (const orphan of orphansAtStart) {
+			try {
+				const action = requeueOrphanedDaemonJob(config, orphan);
+				renderLog(
+					logger,
+					action === "requeued"
+						? `re-queued orphaned job: ${orphan.envelope.jobId}`
+						: `cleaned up completed orphan: ${orphan.envelope.jobId}`,
+				);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				renderLog(logger, `failed to recover orphan ${orphan.envelope.jobId}: ${message}`);
+				recoveryError = buildErrorSummary(
+					`failed to recover orphaned job ${orphan.envelope.jobId}: ${message}`,
+					"ORPHAN_RECOVERY_ERROR",
+				);
+				orphanRecoveryFailed = true;
+			}
+		}
+		// Refresh queue status after recovery so it reflects re-queued jobs.
+		spoolQueueAtStart = buildQueueStatusFromSpool(config);
+		currentStatus = mergeDaemonStatus(config, currentStatus, {
+			queue: spoolQueueAtStart,
+			...(recoveryError ? { lastError: recoveryError } : {}),
+		});
 	}
 
 	let shuttingDown = false;
@@ -593,7 +620,12 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 		});
 		writeDaemonStatusFile(config, { status: currentStatus });
 		renderLog(logger, `state=${currentStatus.state} pid=${pid}`);
-		currentStatus = transitionStatus(config, currentStatus, { state: "idle", pid, heartbeatAt: startedAt }, logger);
+		currentStatus = transitionStatus(
+			config,
+			currentStatus,
+			{ state: orphanRecoveryFailed ? "degraded" : "idle", pid, heartbeatAt: startedAt },
+			logger,
+		);
 
 		// Resolve App auth token before the first poll cycle.
 		if (options.tokenProvider || (config.github?.appAuth && !config.github.token)) {

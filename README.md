@@ -102,9 +102,10 @@ fixbot init
 
 The interactive setup wizard walks you through:
 
-1. **AI provider** -- configure API keys or OAuth login for your preferred provider (Anthropic, OpenAI, Google, etc.)
-2. **GitHub token** -- personal access token for repo access and PR creation
-3. **Repos to watch** -- select which repositories the daemon should monitor
+1. **AI provider** — configure API keys or OAuth login for your preferred provider (Anthropic, OpenAI, Google, etc.)
+2. **Model selection** — pick which model the daemon should use for code analysis and fixes
+3. **GitHub token** — personal access token for repo access and PR creation (needs `contents:write` + `issues:write`)
+4. **Repos to watch** — select which repositories the daemon should monitor
 
 After setup, launch the daemon with `fixbot daemon start` or drop into the interactive TUI with `fixbot`.
 
@@ -117,11 +118,13 @@ The fixbot daemon is a self-hosted service that watches your GitHub repositories
 ### Daemon Commands
 
 ```bash
-fixbot daemon start     # Start the daemon (foreground)
-fixbot daemon stop      # Stop a running daemon
-fixbot daemon status    # Show daemon status
-fixbot daemon health    # Health check
-fixbot daemon enqueue   # Manually enqueue a job
+fixbot daemon start                    # Start (uses ~/.fixbot/daemon.config.json)
+fixbot daemon start --config path.json # Start with explicit config
+fixbot daemon start --foreground       # Start in foreground (logs to stdout)
+fixbot daemon stop                     # Stop a running daemon
+fixbot daemon status                   # Show daemon status
+fixbot daemon health                   # Health check
+fixbot daemon enqueue                  # Manually enqueue a job
 ```
 
 ### Running a Single Job
@@ -140,28 +143,48 @@ fixbot validate-job job.json
 
 ### Daemon Configuration
 
-The daemon reads its configuration from `~/.fixbot/daemon.yml` (or `PI_CONFIG_DIR`). Key sections:
+The daemon reads its configuration from a JSON file. By default it looks at `~/.fixbot/daemon.config.json` — this is the same path the setup wizard (`fixbot init`) writes to. You can override it with `--config <path>`.
 
-```yaml
-version: 1
-
-paths:
-  workDir: ~/.fixbot/work
-  logsDir: ~/.fixbot/logs
-
-github:
-  repos:
-    - owner: your-org
-      name: your-repo
-      triggerLabel: fixbot
-      branches:
-        - main
-
-runtime:
-  model: anthropic/claude-sonnet-4-20250514
-  maxConcurrentJobs: 2
-  timeoutMinutes: 30
+```json
+{
+  "version": "fixbot.daemon-config/v1",
+  "paths": {
+    "stateDir": "~/.fixbot/daemon",
+    "resultsDir": "~/.fixbot/results"
+  },
+  "model": {
+    "provider": "anthropic",
+    "modelId": "claude-sonnet-4-6"
+  },
+  "runtime": {
+    "heartbeatIntervalMs": 5000,
+    "idleSleepMs": 1000
+  },
+  "github": {
+    "repos": [
+      {
+        "url": "https://github.com/your-org/your-repo.git",
+        "baseBranch": "main",
+        "triggerLabel": "fixbot"
+      }
+    ],
+    "token": "ghp_...",
+    "pollIntervalMs": 60000
+  }
+}
 ```
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `paths.stateDir` | Yes | Directory for daemon state (PID, lock, status) |
+| `paths.resultsDir` | Yes | Directory for job result artifacts |
+| `model.provider` | No | AI provider (e.g. `anthropic`, `openai`). Overrides auto-detection. |
+| `model.modelId` | No | Specific model ID (e.g. `claude-sonnet-4-6`). Must match an authenticated model. |
+| `github.repos[].url` | Yes | Repository URL to watch |
+| `github.repos[].baseBranch` | Yes | Branch to clone and target PRs against |
+| `github.repos[].triggerLabel` | Yes | GitHub label that triggers a fix job |
+| `github.token` | No | GitHub PAT (or set `GITHUB_TOKEN` / `GH_TOKEN` env var). Needs `contents:write` and `issues:write` permissions. |
+| `github.pollIntervalMs` | No | Polling interval in ms (default: 60000) |
 
 ### Daemon Workflow
 

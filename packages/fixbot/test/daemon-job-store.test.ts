@@ -19,6 +19,7 @@ import {
 	type NormalizedDaemonConfigV1,
 	normalizeJobSpec,
 	removeActiveDaemonJob,
+	requeueOrphanedDaemonJob,
 } from "../src/index";
 
 const temporaryDirectories: string[] = [];
@@ -169,6 +170,55 @@ describe("daemon job store", () => {
 			enqueueDaemonJob(artifactConfig, createEnvelope(artifactConfig, "duplicate-job", "2026-03-16T08:00:05.000Z")),
 		);
 		expect(artifactError.collisions.map((collision) => collision.kind)).toEqual(["result-file", "artifact-dir"]);
+	});
+
+	it("re-queues an orphaned active job back to the queue with original timestamp", () => {
+		const config = createTempConfig();
+		const originalEnqueuedAt = "2026-03-16T08:00:00.000Z";
+		const envelope = createEnvelope(config, "orphan-requeue-test", originalEnqueuedAt);
+
+		// Enqueue and claim the job to move it to active/.
+		enqueueDaemonJob(config, envelope);
+		const claimed = claimNextQueuedDaemonJob(config);
+		expect(claimed).not.toBeNull();
+		expect(listActiveDaemonJobs(config).length).toBe(1);
+		expect(listQueuedDaemonJobs(config).length).toBe(0);
+
+		// Re-queue the orphan.
+		const orphan = listActiveDaemonJobs(config)[0];
+		const action = requeueOrphanedDaemonJob(config, orphan);
+		expect(action).toBe("requeued");
+
+		// Active should be empty, queue should have the job back.
+		expect(listActiveDaemonJobs(config).length).toBe(0);
+		const queued = listQueuedDaemonJobs(config);
+		expect(queued.length).toBe(1);
+		expect(queued[0].envelope.jobId).toBe("orphan-requeue-test");
+		expect(queued[0].envelope.enqueuedAt).toBe(originalEnqueuedAt);
+	});
+
+	it("cleans up an orphan whose result artifacts already exist instead of re-queuing", () => {
+		const config = createTempConfig();
+		const envelope = createEnvelope(config, "orphan-completed", "2026-03-16T08:00:00.000Z");
+
+		// Enqueue and claim the job.
+		enqueueDaemonJob(config, envelope);
+		claimNextQueuedDaemonJob(config);
+		expect(listActiveDaemonJobs(config).length).toBe(1);
+
+		// Simulate that the job completed by writing a result file.
+		const artifactPaths = getArtifactPaths(config.paths.resultsDir, "orphan-completed");
+		mkdirSync(artifactPaths.artifactDir, { recursive: true });
+		writeFileSync(artifactPaths.resultFile, "{}\n", "utf-8");
+
+		// Re-queue should detect the result and clean up instead.
+		const orphan = listActiveDaemonJobs(config)[0];
+		const action = requeueOrphanedDaemonJob(config, orphan);
+		expect(action).toBe("cleaned");
+
+		// Active should be empty, queue should also be empty (not re-queued).
+		expect(listActiveDaemonJobs(config).length).toBe(0);
+		expect(listQueuedDaemonJobs(config).length).toBe(0);
 	});
 });
 

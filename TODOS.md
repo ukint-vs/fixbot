@@ -1,5 +1,15 @@
 # TODOs
 
+## P1: Resume from existing artifacts when reporter fails
+
+**What:** When a job completes successfully (result JSON + workspace with commits exist) but the reporter fails to push/create PR, the daemon should retry the report step instead of re-running the entire agent job from scratch.
+
+**Why:** Agent runs cost money and time (~5 min per job). If the reporter fails (e.g., `git commit` on clean tree, push auth error, API rate limit), the work is already done — just the delivery failed. Re-triggering currently discards the completed work and starts fresh.
+
+**Context:** The runner writes `result.json` and keeps the workspace with the agent's commits. The reporter (`github-reporter.ts`) needs: workspace dir, result JSON, and envelope. On re-trigger, the daemon could detect existing artifacts for the job ID, skip the agent run, and retry only the reporter step. Key check: `result.json` exists + `status: success` + `changedFileCount > 0` + no PR exists for the branch.
+
+**Effort:** M (human: ~6hr / CC: ~30min)
+
 ## P2: Set up GitHub Actions release pipeline
 
 **What:** Create CI workflow to build binary artifacts and cut GitHub releases for ukint-vs/fixbot.

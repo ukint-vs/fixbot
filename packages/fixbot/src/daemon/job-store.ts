@@ -365,6 +365,41 @@ export function removeActiveDaemonJob(config: Pick<NormalizedDaemonConfigV1, "pa
 	return false;
 }
 
+export type OrphanRecoveryAction = "requeued" | "cleaned";
+
+/**
+ * Recover an orphaned active spool file left behind by a crashed daemon.
+ *
+ * If result artifacts already exist for the job (meaning it completed before the crash),
+ * the active file is simply removed ("cleaned"). Otherwise, the active file is atomically
+ * renamed back into the queue directory for retry ("requeued").
+ *
+ * The original `enqueuedAt` timestamp is preserved so FIFO ordering is maintained.
+ */
+export function requeueOrphanedDaemonJob(
+	config: Pick<NormalizedDaemonConfigV1, "paths">,
+	orphan: ActiveDaemonJobRecord,
+): OrphanRecoveryAction {
+	const artifactPaths = getArtifactPaths(config.paths.resultsDir, orphan.envelope.jobId);
+	if (fileExists(artifactPaths.resultFile)) {
+		// Job completed before the crash — just clean up the stale active file.
+		rmSync(orphan.filePath, { force: true });
+		return "cleaned";
+	}
+	// Job did not complete — move the active file back to the queue for retry.
+	// Guard against queue collision (e.g., crash-loop leaving files in both dirs).
+	const paths = ensureDaemonJobStoreDirectories(config);
+	const queueFileName = buildQueueFileName(orphan.envelope);
+	const queueFilePath = join(paths.queueDir, queueFileName);
+	if (fileExists(queueFilePath)) {
+		// Queue file already exists for this job — just clean up the duplicate active file.
+		rmSync(orphan.filePath, { force: true });
+		return "cleaned";
+	}
+	renameSync(orphan.filePath, queueFilePath);
+	return "requeued";
+}
+
 /**
  * Build a DaemonQueueStatusV1 from the durable spool state.
  * Preview entries are derived from FIFO-ordered queue records up to `previewLimit`.
