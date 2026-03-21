@@ -80,13 +80,14 @@ export async function resolveExecutionModel(
 	// Prefer a provider's known-good default, iterating by provider priority
 	// (same order as coding-agent's model-resolver) rather than models.json insertion order
 	const available = modelRegistry.getAvailable();
-	let selected: Model<Api> | undefined;
-	for (const provider of Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]) {
-		const defaultId = DEFAULT_MODEL_PER_PROVIDER[provider];
-		selected = available.find((m) => m.provider === provider && m.id === defaultId);
-		if (selected) break;
-	}
-	selected ??= available[0];
+	const selected = (Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]).reduce<Model<Api> | undefined>(
+		(found, provider) => {
+			if (found) return found;
+			const defaultId = DEFAULT_MODEL_PER_PROVIDER[provider];
+			return available.find((m) => m.provider === provider && m.id === defaultId);
+		},
+		undefined,
+	) ?? available[0];
 	if (!selected) {
 		throw buildMissingModelError();
 	}
