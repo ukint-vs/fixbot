@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnCommandOrThrow } from "../command";
@@ -187,20 +187,25 @@ export async function postIssueComment(
 // ---------------------------------------------------------------------------
 
 export function buildPRTitle(result: JobResultV1, submission: DaemonSubmissionSourceV1): string {
-	const ownerRepo = submission.githubRepo ?? "unknown";
+	// Use the agent's summary as the title when available — it's more descriptive.
+	const summaryTitle = result.summary?.split("\n")[0]?.trim();
+	const hasUsefulSummary = summaryTitle && summaryTitle.length > 10 && summaryTitle.length < 120;
+
 	switch (result.taskClass) {
 		case "fix_ci":
 			return `fixbot: automated CI repair for run #${submission.githubActionsRunId}`;
 		case "fix_lint":
-			return `fixbot: lint fixes for ${ownerRepo}`;
+			return hasUsefulSummary ? summaryTitle : `fixbot: lint fixes`;
 		case "fix_tests":
-			return `fixbot: test fixes for ${ownerRepo}`;
+			return hasUsefulSummary ? summaryTitle : `fixbot: test fixes`;
 		case "solve_issue":
-			return `fixbot: fix for issue #${submission.githubIssueNumber}`;
+			return hasUsefulSummary
+				? summaryTitle
+				: `fixbot: fix for issue #${submission.githubIssueNumber}`;
 		case "fix_cve":
-			return "fixbot: CVE remediation";
+			return hasUsefulSummary ? summaryTitle : "fixbot: CVE remediation";
 		default:
-			return "fixbot: automated repair";
+			return hasUsefulSummary ? summaryTitle : "fixbot: automated repair";
 	}
 }
 
@@ -212,7 +217,49 @@ export function buildPRBody(
 ): string {
 	const model = result.execution.selectedModel;
 	const modelStr = model ? `${model.provider}/${model.modelId}` : "unknown";
-	const lines: string[] = ["## fixbot repair summary", "", result.summary, "", "---", ""];
+
+	const lines: string[] = [];
+
+	// Link to the originating issue when available
+	if (submission.githubIssueNumber && submission.githubRepo) {
+		lines.push(`Closes ${submission.githubRepo}#${submission.githubIssueNumber}`, "");
+	}
+
+	// Agent's full explanation
+	lines.push("## Summary", "");
+	if (result.summary) {
+		lines.push(result.summary, "");
+	}
+
+	// Include the full agent output when it's longer than the summary (has explanation/table/etc.)
+	let fullText = "";
+	try {
+		fullText = result.artifacts.assistantFinalFile
+			? readFileSync(result.artifacts.assistantFinalFile, "utf-8")
+			: "";
+	} catch {
+		// Best-effort — file may not exist
+	}
+	if (fullText.length > (result.summary?.length ?? 0) + 20) {
+		lines.push("## Agent Analysis", "", "<details>", "<summary>Full agent output</summary>", "");
+		// Strip the marker lines from the output
+		const cleaned = fullText
+			.split("\n")
+			.filter(
+				(l) =>
+					!l.startsWith("FIXBOT_RESULT:") &&
+					!l.startsWith("FIXBOT_SUMMARY:") &&
+					!l.startsWith("FIXBOT_FAILURE_REASON:") &&
+					!l.startsWith("GITFIX_RESULT:") &&
+					!l.startsWith("GITFIX_SUMMARY:") &&
+					!l.startsWith("GITFIX_FAILURE_REASON:"),
+			)
+			.join("\n")
+			.trim();
+		lines.push(cleaned, "", "</details>", "");
+	}
+
+	lines.push("---", "");
 	if (submission.githubActionsRunId !== undefined) {
 		lines.push(`**CI run:** #${submission.githubActionsRunId}`);
 	}
@@ -221,8 +268,6 @@ export function buildPRBody(
 		`**Changed files:** ${result.diagnostics.changedFileCount}`,
 		`**Model:** ${modelStr}`,
 		`**Job:** \`${jobId}\``,
-		"",
-		"---",
 		"",
 		`*Automated repair by [fixbot](${botUrl}). Review before merging.*`,
 	);
