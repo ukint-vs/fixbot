@@ -16,6 +16,7 @@ import {
 	configureLocalGitIdentity,
 	copyOptionalWorkspaceArtifact,
 	countChangedFilesFromStatus,
+	countCommittedChangedFiles,
 	getHeadCommit,
 } from "./git";
 import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
@@ -193,7 +194,12 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	}
 
 	const finishedAt = now();
-	const changedFileCount = countChangedFilesFromStatus(gitStatusText);
+	// Count both uncommitted working-tree changes AND committed-but-not-pushed changes.
+	// The agent typically commits its work, so `git status --short` shows a clean tree
+	// while the actual diff vs baseCommit has real changes.
+	const uncommittedCount = countChangedFilesFromStatus(gitStatusText);
+	const committedCount = baseCommit ? await countCommittedChangedFiles(paths.workspaceDir, baseCommit) : 0;
+	const changedFileCount = Math.max(uncommittedCount, committedCount);
 	const result: JobResultV1 = {
 		version: JOB_RESULT_VERSION_V1,
 		jobId: job.jobId,
