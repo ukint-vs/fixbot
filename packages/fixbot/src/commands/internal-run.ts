@@ -17,7 +17,7 @@ export default class InternalRun extends Command {
 
 	async run(): Promise<void> {
 		const { flags } = await this.parse(InternalRun);
-		const { executeFromPlan } = await import("../internal-runner");
-		await executeFromPlan(flags.execution);
+		const { runInternalExecutionFromPlan } = await import("../internal-runner");
+		await runInternalExecutionFromPlan(flags.execution);
 	}
 }
