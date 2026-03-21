@@ -98,8 +98,16 @@ export async function createAndPushBranch(
 	await configureLocalGitIdentity(workspaceDir);
 
 	await spawnCommandOrThrow("git", ["checkout", "-b", branchName], { cwd: workspaceDir });
+
+	// Stage and commit any uncommitted changes. The agent may have already committed,
+	// so allow `git commit` to exit with code 1 (nothing to commit).
 	await spawnCommandOrThrow("git", ["add", "-A"], { cwd: workspaceDir });
-	await spawnCommandOrThrow("git", ["commit", "-m", "fixbot: automated repair"], { cwd: workspaceDir });
+	try {
+		await spawnCommandOrThrow("git", ["commit", "-m", "fixbot: automated repair"], { cwd: workspaceDir });
+	} catch {
+		// Nothing to commit — the agent already committed its changes. That's fine.
+		logger?.("[fixbot] github-report: no uncommitted changes to commit (agent already committed)");
+	}
 
 	const { owner, repo } = parseOwnerRepo(repoUrl);
 	const pushUrl = `https://x-access-token@github.com/${owner}/${repo}.git`;
