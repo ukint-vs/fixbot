@@ -149,8 +149,8 @@ The daemon reads its configuration from a JSON file. By default it looks at `~/.
 {
   "version": "fixbot.daemon-config/v1",
   "paths": {
-    "stateDir": "/Users/you/.fixbot/daemon",
-    "resultsDir": "/Users/you/.fixbot/results"
+    "stateDir": "~/.fixbot/daemon",
+    "resultsDir": "~/.fixbot/results"
   },
   "model": {
     "provider": "anthropic",

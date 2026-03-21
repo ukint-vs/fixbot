@@ -245,15 +245,7 @@ export function buildPRBody(
 		// Strip the marker lines from the output
 		const cleaned = fullText
 			.split("\n")
-			.filter(
-				(l) =>
-					!l.startsWith("FIXBOT_RESULT:") &&
-					!l.startsWith("FIXBOT_SUMMARY:") &&
-					!l.startsWith("FIXBOT_FAILURE_REASON:") &&
-					!l.startsWith("GITFIX_RESULT:") &&
-					!l.startsWith("GITFIX_SUMMARY:") &&
-					!l.startsWith("GITFIX_FAILURE_REASON:"),
-			)
+			.filter((l) => !/^(?:FIXBOT|GITFIX)_(?:RESULT|SUMMARY|FAILURE_REASON):/.test(l))
 			.join("\n")
 			.trim();
 		lines.push(cleaned, "", "</details>", "");
