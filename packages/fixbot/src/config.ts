@@ -300,6 +300,16 @@ export function normalizeDaemonConfig(value: unknown, source: string = "daemon c
 	const pretty = status.pretty === undefined ? true : assertBoolean(status.pretty, `${source}.status.pretty`);
 	const github = root.github === undefined ? undefined : normalizeGitHubConfig(root.github, `${source}.github`);
 
+	// Optional model override — { provider, modelId }
+	let model: import("./types").DaemonModelConfig | undefined;
+	if (root.model !== undefined) {
+		const m = assertObject(root.model, `${source}.model`);
+		model = {
+			provider: assertNonEmptyString(m.provider, `${source}.model.provider`),
+			modelId: assertNonEmptyString(m.modelId, `${source}.model.modelId`),
+		};
+	}
+
 	const identityRaw = root.identity === undefined ? {} : assertObject(root.identity, `${source}.identity`);
 	const botUrl =
 		identityRaw.botUrl === undefined
@@ -326,6 +336,7 @@ export function normalizeDaemonConfig(value: unknown, source: string = "daemon c
 		},
 		github,
 		identity: { botUrl },
+		model,
 	};
 }
 

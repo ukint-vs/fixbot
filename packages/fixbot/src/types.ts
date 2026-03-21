@@ -215,6 +215,16 @@ export interface DaemonRuntimeConfig {
 	idleSleepMs?: number;
 }
 
+/**
+ * Optional model override in daemon config.
+ * When set, the daemon uses this model instead of the provider default.
+ * Example: { provider: "anthropic", modelId: "claude-sonnet-4-6" }
+ */
+export interface DaemonModelConfig {
+	provider: string;
+	modelId: string;
+}
+
 export interface DaemonGitHubRepoConfig {
 	url: string;
 	baseBranch: string;
@@ -256,6 +266,7 @@ export interface DaemonConfigV1 {
 	runtime?: DaemonRuntimeConfig;
 	github?: DaemonGitHubConfig;
 	identity?: { botUrl?: string };
+	model?: DaemonModelConfig;
 }
 
 export interface DaemonResolvedPaths {
@@ -284,6 +295,7 @@ export interface NormalizedDaemonConfigV1 {
 	runtime: NormalizedDaemonRuntimeConfig;
 	github?: NormalizedDaemonGitHubConfig;
 	identity: { botUrl: string };
+	model?: DaemonModelConfig;
 }
 
 export interface DaemonErrorSummary {

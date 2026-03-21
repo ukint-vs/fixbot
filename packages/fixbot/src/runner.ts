@@ -18,7 +18,7 @@ import {
 	countChangedFilesFromStatus,
 	getHeadCommit,
 } from "./git";
-import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
+import { resolveExecutionModel, resolveHostAgentConfig, type ResolveExecutionModelOptions } from "./host-agent";
 import { assertDockerImageReady } from "./image";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
 import {
@@ -28,6 +28,7 @@ import {
 	JOB_RESULT_VERSION_V1,
 	type JobResultV1,
 	type ModelSelection,
+	type DaemonModelConfig,
 	type NormalizedJobSpecV1,
 } from "./types";
 
@@ -36,6 +37,8 @@ export interface RunJobOptions {
 	executor?: PreparedJobExecutor;
 	now?: () => Date;
 	dockerImageVerifier?: () => Promise<string>;
+	/** Model override from daemon config — passed to resolveExecutionModel. */
+	configModel?: DaemonModelConfig;
 }
 
 function logProgress(message: string): void {
@@ -99,7 +102,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 
 	try {
 		const hostConfig = resolveHostAgentConfig();
-		const resolvedModel = await resolveExecutionModel(job);
+		const resolvedModel = await resolveExecutionModel(job, { configModel: options.configModel });
 		selectedModel = {
 			provider: resolvedModel.provider,
 			modelId: resolvedModel.id,

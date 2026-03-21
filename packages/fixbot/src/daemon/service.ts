@@ -396,6 +396,7 @@ async function runClaimedDaemonJob(
 	try {
 		const result = await jobRunner(claimed.envelope.job, {
 			resultsDir: config.paths.resultsDir,
+			configModel: config.model,
 		});
 		removeActiveDaemonJob(config, claimed.envelope.jobId);
 		const recentResults = appendRecentResult(
