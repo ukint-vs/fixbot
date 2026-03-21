@@ -95,7 +95,7 @@ describe("parseOwnerRepo", () => {
 	});
 
 	it("throws on non-URL string", () => {
-		expect(() => parseOwnerRepo("not-a-url")).toThrow("owner/repo");
+		expect(() => parseOwnerRepo("not-a-url")).toThrow("Expected owner/repo format");
 	});
 });
 

@@ -1,7 +1,7 @@
 import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import type { Api, Model } from "@oh-my-pi/pi-ai";
+import { DEFAULT_MODEL_PER_PROVIDER, type Api, type KnownProvider, type Model } from "@oh-my-pi/pi-ai";
 import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
 import type { ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
@@ -77,12 +77,21 @@ export async function resolveExecutionModel(
 		return model as Model<Api>;
 	}
 
-	// Otherwise use first available model
-	const firstAvailable = modelRegistry.getAvailable()[0];
-	if (!firstAvailable) {
+	// Prefer a provider's known-good default, iterating by provider priority
+	// (same order as coding-agent's model-resolver) rather than models.json insertion order
+	const available = modelRegistry.getAvailable();
+	const selected = (Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]).reduce<Model<Api> | undefined>(
+		(found, provider) => {
+			if (found) return found;
+			const defaultId = DEFAULT_MODEL_PER_PROVIDER[provider];
+			return available.find((m) => m.provider === provider && m.id === defaultId);
+		},
+		undefined,
+	) ?? available[0];
+	if (!selected) {
 		throw buildMissingModelError();
 	}
-	return firstAvailable as Model<Api>;
+	return selected as Model<Api>;
 }
 
 export async function resolvePlannedModel(
