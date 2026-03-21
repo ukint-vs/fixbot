@@ -4,9 +4,9 @@ import {
 	buildGitHubJobSpec,
 	deriveGitHubJobId,
 	type GitHubEnqueueFn,
-	parseGitHubRepoPath,
 	pollGitHubRepos,
 } from "../src/daemon/github-poller";
+import { parseOwnerRepo } from "../src/daemon/github-reporter";
 import { DuplicateDaemonJobError } from "../src/daemon/job-store";
 import type { DaemonJobEnvelopeV1, NormalizedDaemonGitHubConfig } from "../src/types";
 
@@ -49,40 +49,53 @@ const BASE_CONFIG: NormalizedDaemonGitHubConfig = {
 	pollIntervalMs: 60_000,
 };
 
+const FIX_CI_CONFIG: NormalizedDaemonGitHubConfig = {
+	repos: [
+		{
+			url: "https://github.com/owner/repo",
+			baseBranch: "main",
+			triggerLabel: "fixbot",
+			taskClassOverrides: { fixbot: "fix_ci" },
+		},
+	],
+	token: "fake-token",
+	pollIntervalMs: 60_000,
+};
+
 const RESULTS_DIR = "/tmp/fixbot-test-results";
 
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
-describe("parseGitHubRepoPath", () => {
+describe("parseOwnerRepo", () => {
 	it("handles plain https URL", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with .git suffix", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo.git")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo.git")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with trailing slash", () => {
-		expect(parseGitHubRepoPath("https://github.com/owner/repo/")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo/")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("handles URL with .git and trailing slash", () => {
 		// .git before trailing slash — strip trailing slash first then .git
-		expect(parseGitHubRepoPath("https://github.com/owner/repo.git/")).toEqual({ owner: "owner", repo: "repo" });
+		expect(parseOwnerRepo("https://github.com/owner/repo.git/")).toEqual({ owner: "owner", repo: "repo" });
 	});
 
 	it("throws on invalid URL with too many segments", () => {
-		expect(() => parseGitHubRepoPath("https://github.com/a/b/c")).toThrow("exactly owner/repo");
+		expect(() => parseOwnerRepo("https://github.com/a/b/c")).toThrow("exactly owner/repo");
 	});
 
 	it("throws on invalid URL with too few segments", () => {
-		expect(() => parseGitHubRepoPath("https://github.com/owner")).toThrow("exactly owner/repo");
+		expect(() => parseOwnerRepo("https://github.com/owner")).toThrow("exactly owner/repo");
 	});
 
 	it("throws on non-URL string", () => {
-		expect(() => parseGitHubRepoPath("not-a-url")).toThrow("Invalid GitHub repo URL");
+		expect(() => parseOwnerRepo("not-a-url")).toThrow("owner/repo");
 	});
 });
 
@@ -104,8 +117,8 @@ describe("deriveGitHubJobId", () => {
 });
 
 describe("buildGitHubJobSpec", () => {
-	it("returns a normalized job spec with fix_ci task class", () => {
-		const spec = buildGitHubJobSpec("https://github.com/owner/repo", "main", 10, 12345, "fixbot");
+	it("returns a normalized job spec with explicit fix_ci task class", () => {
+		const spec = buildGitHubJobSpec("https://github.com/owner/repo", "main", 10, 12345, "fixbot", "fix_ci");
 		expect(spec.version).toBe("fixbot.job/v1");
 		expect(spec.taskClass).toBe("fix_ci");
 		expect(spec.repo.url).toBe("https://github.com/owner/repo");
@@ -115,6 +128,27 @@ describe("buildGitHubJobSpec", () => {
 		expect(spec.execution.timeoutMs).toBe(600_000);
 		expect(spec.execution.memoryLimitMb).toBe(4096);
 		expect(spec.jobId).toMatch(/^gh-[a-f0-9]{16}$/);
+	});
+
+	it("defaults to solve_issue with solveIssue context", () => {
+		const spec = buildGitHubJobSpec("https://github.com/owner/repo", "main", 10, 0, "fixbot");
+		expect(spec.taskClass).toBe("solve_issue");
+		expect(spec.solveIssue).toBeDefined();
+		expect(spec.solveIssue!.issueNumber).toBe(10);
+		expect(spec.fixCi).toBeUndefined();
+	});
+
+	it("includes issueTitle in solveIssue context when provided", () => {
+		const spec = buildGitHubJobSpec(
+			"https://github.com/owner/repo",
+			"main",
+			10,
+			0,
+			"fixbot",
+			"solve_issue",
+			"Fix the login bug",
+		);
+		expect(spec.solveIssue!.issueTitle).toBe("Fix the login bug");
 	});
 });
 
@@ -126,7 +160,7 @@ describe("pollGitHubRepos", () => {
 		mock.restore();
 	});
 
-	it("enqueues one job for a labeled issue with a failing run", async () => {
+	it("enqueues one fix_ci job for a labeled issue with a failing run", async () => {
 		globalThis.fetch = createMockFetch([
 			{
 				urlPattern: "/repos/owner/repo/issues?labels=fixbot",
@@ -151,7 +185,7 @@ describe("pollGitHubRepos", () => {
 		const enqueued: DaemonJobEnvelopeV1[] = [];
 		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
 
-		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
+		const result = await pollGitHubRepos(FIX_CI_CONFIG, RESULTS_DIR, enqueueFn);
 
 		expect(result.enqueued).toHaveLength(1);
 		expect(result.skipped).toBe(0);
@@ -191,7 +225,7 @@ describe("pollGitHubRepos", () => {
 		expect(result.enqueued).toHaveLength(0);
 	});
 
-	it("no failing run skips with zero enqueue", async () => {
+	it("no failing run skips with zero enqueue for fix_ci override", async () => {
 		globalThis.fetch = createMockFetch([
 			{
 				urlPattern: "/repos/owner/repo/issues?labels=fixbot",
@@ -209,7 +243,7 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
-		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
+		const result = await pollGitHubRepos(FIX_CI_CONFIG, RESULTS_DIR, enqueueFn);
 
 		expect(enqueueFn).not.toHaveBeenCalled();
 		expect(result.skipped).toBe(1);
@@ -237,7 +271,7 @@ describe("pollGitHubRepos", () => {
 			throw new DuplicateDaemonJobError("gh-test", [{ kind: "queue", path: "/fake" }]);
 		};
 
-		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
+		const result = await pollGitHubRepos(FIX_CI_CONFIG, RESULTS_DIR, enqueueFn);
 
 		expect(result.skipped).toBe(1);
 		expect(result.errors).toBe(0);
@@ -387,21 +421,17 @@ describe("pollGitHubRepos", () => {
 		expect(enqueued[0].submission.githubActionsRunId).toBeUndefined();
 	});
 
-	it("triggerLabel without override still produces fix_ci (backward compat)", async () => {
-		// Uses BASE_CONFIG which has no taskClassOverrides
+	it("triggerLabel without override produces solve_issue by default", async () => {
+		// Uses BASE_CONFIG which has no taskClassOverrides — default is now solve_issue
 		globalThis.fetch = createMockFetch([
 			{
 				urlPattern: "/repos/owner/repo/issues?labels=fixbot",
-				response: { status: 200, body: [{ number: 7, title: "CI broken" }] },
+				response: { status: 200, body: [{ number: 7, title: "Fix the login bug" }] },
 			},
 			{
 				urlPattern: "/repos/owner/repo/issues/7/comments",
 				method: "GET",
 				response: { status: 200, body: [] },
-			},
-			{
-				urlPattern: "/repos/owner/repo/actions/runs",
-				response: { status: 200, body: { workflow_runs: [{ id: 99001 }] } },
 			},
 			{
 				urlPattern: "/repos/owner/repo/issues/7/comments",
@@ -416,7 +446,10 @@ describe("pollGitHubRepos", () => {
 		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
 
 		expect(result.enqueued).toHaveLength(1);
-		expect(enqueued[0].job.taskClass).toBe("fix_ci");
-		expect(enqueued[0].job.fixCi).toBeDefined();
+		expect(enqueued[0].job.taskClass).toBe("solve_issue");
+		expect(enqueued[0].job.solveIssue).toBeDefined();
+		expect(enqueued[0].job.solveIssue!.issueNumber).toBe(7);
+		expect(enqueued[0].job.solveIssue!.issueTitle).toBe("Fix the login bug");
+		expect(enqueued[0].job.fixCi).toBeUndefined();
 	});
 });

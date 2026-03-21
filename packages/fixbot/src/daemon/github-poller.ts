@@ -48,7 +48,7 @@ export async function fetchLabeledIssues(
 	label: string,
 	token?: string,
 	logger?: (message: string) => void,
-): Promise<Array<{ number: number; title: string }>> {
+): Promise<Array<{ number: number; title: string; body: string | null }>> {
 	const path = `/repos/${owner}/${repo}/issues?labels=${encodeURIComponent(label)}&state=open&per_page=100`;
 	let response: Response;
 	try {
@@ -62,15 +62,15 @@ export async function fetchLabeledIssues(
 		logger?.(`[fixbot] github-poll warn: fetchLabeledIssues ${owner}/${repo} returned ${response.status}`);
 		return [];
 	}
-	let data: Array<{ number: number; title: string }>;
+	let data: Array<{ number: number; title: string; body: string | null }>;
 	try {
-		data = (await response.json()) as Array<{ number: number; title: string }>;
+		data = (await response.json()) as Array<{ number: number; title: string; body: string | null }>;
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
 		logger?.(`[fixbot] github-poll warn: fetchLabeledIssues ${owner}/${repo} malformed JSON: ${msg}`);
 		return [];
 	}
-	return data.map((issue) => ({ number: issue.number, title: issue.title }));
+	return data.map((issue) => ({ number: issue.number, title: issue.title, body: issue.body ?? null }));
 }
 
 export async function fetchLatestFailedRun(
@@ -177,7 +177,9 @@ export function buildGitHubJobSpec(
 	issueNumber: number,
 	runId: number,
 	labelName: string,
-	taskClass: TaskClass = "fix_ci",
+	taskClass: TaskClass = "solve_issue",
+	issueTitle?: string,
+	issueBody?: string,
 ): NormalizedJobSpecV1 {
 	const jobId = deriveGitHubJobId(repoUrl, issueNumber, labelName);
 	const spec: Record<string, unknown> = {
@@ -189,6 +191,8 @@ export function buildGitHubJobSpec(
 	};
 	if (taskClass === "fix_ci") {
 		spec.fixCi = { githubActionsRunId: runId };
+	} else if (taskClass === "solve_issue") {
+		spec.solveIssue = { issueNumber, ...(issueTitle ? { issueTitle } : {}), ...(issueBody ? { issueBody } : {}) };
 	}
 	return normalizeJobSpec(spec, "github-poll job");
 }
@@ -237,7 +241,7 @@ export async function pollGitHubRepos(
 
 		for (const labelName of labelsToQuery) {
 			// Determine task class for this label
-			const taskClass: TaskClass = repoConfig.taskClassOverrides?.[labelName] ?? "fix_ci";
+			const taskClass: TaskClass = repoConfig.taskClassOverrides?.[labelName] ?? "solve_issue";
 
 			const issues = await fetchLabeledIssues(owner, repo, labelName, githubConfig.token, logger);
 
@@ -277,6 +281,8 @@ export async function pollGitHubRepos(
 					runId,
 					labelName,
 					taskClass,
+					issue.title,
+					issue.body ?? undefined,
 				);
 				const artifactPaths = getArtifactPaths(resultsDir, jobSpec.jobId);
 				const envelope: DaemonJobEnvelopeV1 = {
