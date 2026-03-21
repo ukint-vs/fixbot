@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import {
 	DAEMON_CONFIG_VERSION_V1,
@@ -36,6 +37,9 @@ export const DEFAULT_DAEMON_STATUS_FILE = "daemon-status.json";
 export const DEFAULT_DAEMON_PID_FILE = "daemon.pid";
 export const DEFAULT_DAEMON_LOCK_FILE = "daemon.lock";
 export const DEFAULT_BOT_URL = "https://github.com/nicobailon/fixbot";
+export const DEFAULT_DAEMON_CONFIG_FILENAME = "daemon.config.json";
+export const DEFAULT_FIXBOT_DIR = join(homedir(), ".fixbot");
+export const DEFAULT_DAEMON_CONFIG_PATH = join(DEFAULT_FIXBOT_DIR, DEFAULT_DAEMON_CONFIG_FILENAME);
 
 export interface CreateDaemonStatusInput {
 	state: DaemonLifecycleState;

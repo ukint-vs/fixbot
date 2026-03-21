@@ -1,4 +1,5 @@
 import { Args, Command, Flags } from "@oh-my-pi/pi-utils/cli";
+import { DEFAULT_DAEMON_CONFIG_PATH } from "../config";
 
 const ACTIONS = ["start", "stop", "status", "health", "enqueue"] as const;
 type DaemonAction = (typeof ACTIONS)[number];
@@ -15,7 +16,7 @@ export default class Daemon extends Command {
 	};
 
 	static flags = {
-		config: Flags.string({ description: "Path to daemon config file", required: true }),
+		config: Flags.string({ description: "Path to daemon config file", default: DEFAULT_DAEMON_CONFIG_PATH }),
 		foreground: Flags.boolean({ description: "Run daemon in foreground (start only)" }),
 		job: Flags.string({ description: "Path to job spec JSON file (enqueue only)" }),
 	};
@@ -23,7 +24,7 @@ export default class Daemon extends Command {
 	async run(): Promise<void> {
 		const { args, flags } = await this.parse(Daemon);
 		const action = args.action as DaemonAction;
-		const configPath = flags.config!;
+		const configPath = flags.config;
 
 		switch (action) {
 			case "start": {

@@ -9,7 +9,6 @@
  *   5. Connectivity verification
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { AuthCredentialStore, getOAuthProviders, type OAuthProviderId } from "@oh-my-pi/pi-ai";
 import { discoverAuthStorage } from "@oh-my-pi/pi-coding-agent";
@@ -28,6 +27,7 @@ import {
 	success,
 	warn,
 } from "./prompt";
+import { DEFAULT_DAEMON_CONFIG_FILENAME, DEFAULT_FIXBOT_DIR } from "../config";
 
 // ---------------------------------------------------------------------------
 // Provider definitions for API key auth (subset most useful for solo dev)
@@ -393,12 +393,12 @@ async function generateDaemonConfig(
 ): Promise<GeneratedConfig> {
 	step(4, TOTAL_STEPS, "Generate Daemon Config");
 
-	const defaultDir = join(homedir(), ".fixbot");
+	const defaultDir = DEFAULT_FIXBOT_DIR;
 	const configDir = await askWithDefault("Config directory", defaultDir);
 
 	const stateDir = join(configDir, "daemon");
 	const resultsDir = join(configDir, "results");
-	const configPath = join(configDir, "daemon.config.json");
+	const configPath = join(configDir, DEFAULT_DAEMON_CONFIG_FILENAME);
 
 	const config: Record<string, unknown> = {
 		version: "fixbot.daemon-config/v1",

@@ -82,7 +82,9 @@ type FlagValue<D extends FlagDescriptor> = D["kind"] extends "boolean"
 			: number | undefined
 		: D extends { multiple: true }
 			? string[] | undefined
-			: string | undefined;
+			: D extends { default: string }
+				? string
+				: string | undefined;
 
 type ArgValue<D extends ArgDescriptor> = D extends { multiple: true } ? string[] | undefined : string | undefined;
 
