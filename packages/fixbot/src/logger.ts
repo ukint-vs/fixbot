@@ -78,6 +78,23 @@ export function createNoopLogger(): Logger {
  * Lines are stored as "[LEVEL] message" with no timestamp so assertions
  * remain deterministic regardless of wall-clock time.
  */
+/**
+ * Converts a Logger to a plain callback `(msg: string) => void` for use
+ * with functions that still accept the legacy logger signature.
+ * Messages are routed by prefix: "[fixbot] *warn*" → warn, "[fixbot] *error*" → error, else → info.
+ */
+export function toLogCallback(logger: Logger): (message: string) => void {
+	return (message: string) => {
+		if (message.includes("error") || message.includes("ERROR")) {
+			logger.error(message);
+		} else if (message.includes("warn") || message.includes("WARN")) {
+			logger.warn(message);
+		} else {
+			logger.info(message);
+		}
+	};
+}
+
 export function createCapturingLogger(): Logger & { lines: string[] } {
 	const lines: string[] = [];
 	function record(level: string, message: string): void {

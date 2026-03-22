@@ -2,7 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createDaemonStatus, loadDaemonConfig } from "../config";
-import type { Logger } from "../logger";
+import { type Logger, toLogCallback } from "../logger";
 import { runJob } from "../runner";
 import type {
 	DaemonErrorSummary,
@@ -71,7 +71,7 @@ export type GitHubReporterFn = (
 	envelope: DaemonJobEnvelopeV1,
 	result: JobResultV1,
 	config: NormalizedDaemonConfigV1,
-	logger?: Logger,
+	logger?: (message: string) => void,
 ) => Promise<void>;
 
 export interface RunDaemonOptions {
@@ -424,7 +424,7 @@ async function runClaimedDaemonJob(
 		}
 		if (githubReporter) {
 			try {
-				await githubReporter(claimed.envelope, result, config, logger);
+				await githubReporter(claimed.envelope, result, config, logger ? toLogCallback(logger) : undefined);
 			} catch (reportError) {
 				logger?.error(
 					`github-report error: ${reportError instanceof Error ? reportError.message : String(reportError)}`,
@@ -525,7 +525,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 					cfg.github,
 					cfg.paths.resultsDir,
 					(envelope) => enqueueDaemonJob(cfg, envelope),
-					logger,
+					logger ? toLogCallback(logger) : undefined,
 				);
 			}
 		: undefined;
