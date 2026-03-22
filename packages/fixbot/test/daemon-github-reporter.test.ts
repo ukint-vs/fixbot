@@ -7,6 +7,7 @@ import {
 	buildNoPatchCommentBody,
 	buildPRBody,
 	buildPRTitle,
+	fetchGitHubUserIdentity,
 	parseOwnerRepo,
 	reportJobResult,
 } from "../src/daemon/github-reporter";
@@ -27,6 +28,7 @@ mock.module("../src/command", () => ({
 
 mock.module("../src/git", () => ({
 	configureLocalGitIdentity: mock(async () => {}),
+	tryEnableGpgSigning: mock(async () => false),
 }));
 
 // ---------------------------------------------------------------------------
@@ -278,6 +280,14 @@ describe("reportJobResult", () => {
 		const envelope = makeEnvelope();
 		const config = makeConfig();
 
+		// Mock GET /user for identity fetch in createAndPushBranch
+		mockFetch.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ login: "fixbot-bot", id: 12345, name: "Fixbot Bot", email: "fixbot@example.com" }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			),
+		);
+		// Mock POST /repos/.../pulls
 		mockFetch.mockResolvedValueOnce(
 			new Response(JSON.stringify({ number: 42, html_url: "https://github.com/test-owner/test-repo/pull/42" }), {
 				status: 201,
@@ -297,9 +307,10 @@ describe("reportJobResult", () => {
 		expect(gitCommands).toContain("git commit");
 		expect(gitCommands).toContain("git push");
 
-		// fetch called for PR creation
-		expect(mockFetch).toHaveBeenCalledTimes(1);
-		const [fetchUrl, fetchInit] = mockFetch.mock.calls[0] as [string, RequestInit];
+		// fetch called for GET /user (identity) and POST /repos/.../pulls (PR creation)
+		expect(mockFetch).toHaveBeenCalledTimes(2);
+		const prCall = mockFetch.mock.calls[1] as [string, RequestInit];
+		const [fetchUrl, fetchInit] = prCall;
 		expect(fetchUrl).toContain("/repos/test-owner/test-repo/pulls");
 		const fetchBody = JSON.parse(fetchInit.body as string) as Record<string, string>;
 		expect(fetchBody.head).toBe("fixbot/job-abc");
@@ -408,6 +419,57 @@ describe("reportJobResult", () => {
 		expect(fetchUrl).toContain("/issues/7/comments");
 
 		expect(logs.some((l) => l.includes("workspace missing"))).toBe(true);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// fetchGitHubUserIdentity
+// ---------------------------------------------------------------------------
+
+describe("fetchGitHubUserIdentity", () => {
+	it("returns name and email from the API response", async () => {
+		mockFetch.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ login: "octocat", id: 1, name: "The Octocat", email: "octocat@github.com" }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			),
+		);
+		const identity = await fetchGitHubUserIdentity("ghp_token");
+		expect(identity).toEqual({ name: "The Octocat", email: "octocat@github.com" });
+	});
+
+	it("falls back to noreply email when email is null", async () => {
+		mockFetch.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ login: "octocat", id: 583231, name: "The Octocat", email: null }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			),
+		);
+		const identity = await fetchGitHubUserIdentity("ghp_token");
+		expect(identity).toEqual({ name: "The Octocat", email: "583231+octocat@users.noreply.github.com" });
+	});
+
+	it("uses login as name when display name is null", async () => {
+		mockFetch.mockResolvedValueOnce(
+			new Response(
+				JSON.stringify({ login: "octocat", id: 1, name: null, email: "octocat@github.com" }),
+				{ status: 200, headers: { "Content-Type": "application/json" } },
+			),
+		);
+		const identity = await fetchGitHubUserIdentity("ghp_token");
+		expect(identity).toEqual({ name: "octocat", email: "octocat@github.com" });
+	});
+
+	it("returns null when the API returns a non-200 status", async () => {
+		mockFetch.mockResolvedValueOnce(new Response("{}", { status: 401 }));
+		const identity = await fetchGitHubUserIdentity("ghp_bad_token");
+		expect(identity).toBeNull();
+	});
+
+	it("returns null when fetch throws", async () => {
+		mockFetch.mockRejectedValueOnce(new Error("network error"));
+		const identity = await fetchGitHubUserIdentity("ghp_token");
+		expect(identity).toBeNull();
 	});
 });
 

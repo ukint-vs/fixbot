@@ -243,6 +243,8 @@ export interface DaemonGitHubConfig {
 	token?: string;
 	pollIntervalMs?: number;
 	appAuth?: GitHubAppAuthConfig;
+	/** GPG key ID (fingerprint or email) used for signing commits. When omitted, signing is attempted only if git's global user.signingKey is set. */
+	gpgKeyId?: string;
 }
 
 export interface NormalizedDaemonGitHubRepoConfig {
@@ -257,6 +259,8 @@ export interface NormalizedDaemonGitHubConfig {
 	token: string | undefined;
 	pollIntervalMs: number;
 	appAuth?: GitHubAppAuthConfig;
+	/** Normalized from DaemonGitHubConfig.gpgKeyId. */
+	gpgKeyId?: string;
 }
 
 export interface DaemonConfigV1 {

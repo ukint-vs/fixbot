@@ -16,9 +16,56 @@ export async function cloneRepository(url: string, baseBranch: string, workspace
 	]);
 }
 
-export async function configureLocalGitIdentity(workspaceDir: string): Promise<void> {
-	await spawnCommandOrThrow("git", ["config", "user.name", "fixbot"], { cwd: workspaceDir });
-	await spawnCommandOrThrow("git", ["config", "user.email", "fixbot@local.invalid"], { cwd: workspaceDir });
+export async function configureLocalGitIdentity(
+	workspaceDir: string,
+	identity?: { name: string; email: string },
+): Promise<void> {
+	// Fall back to a neutral bot identity when no GitHub identity is available.
+	const name = identity?.name ?? "fixbot";
+	const email = identity?.email ?? "fixbot@local.invalid";
+	await spawnCommandOrThrow("git", ["config", "user.name", name], { cwd: workspaceDir });
+	await spawnCommandOrThrow("git", ["config", "user.email", email], { cwd: workspaceDir });
+}
+
+/**
+ * Attempt to configure GPG commit signing for the workspace.
+ * Returns true when signing is successfully enabled, false otherwise.
+ * Callers should log the result and continue without signing when this returns false.
+ */
+export async function tryEnableGpgSigning(
+	workspaceDir: string,
+	keyId?: string,
+	logger?: (message: string) => void,
+): Promise<boolean> {
+	// Verify gpg binary is reachable before touching any config.
+	try {
+		await spawnCommandOrThrow("gpg", ["--version"]);
+	} catch {
+		logger?.("[fixbot] git: gpg not found — commit signing skipped");
+		return false;
+	}
+
+	// Prefer the explicitly configured key; fall back to the global git signing key.
+	let signingKey = keyId;
+	if (!signingKey) {
+		try {
+			const result = await spawnCommandOrThrow("git", ["config", "--global", "user.signingKey"]);
+			signingKey = result.stdout.trim() || undefined;
+		} catch {
+			// No global signing key configured — not an error.
+		}
+	}
+
+	if (!signingKey) {
+		logger?.("[fixbot] git: no GPG signing key configured — commit signing skipped");
+		return false;
+	}
+
+	// Configure local overrides so they apply only to this workspace clone.
+	await spawnCommandOrThrow("git", ["config", "user.signingKey", signingKey], { cwd: workspaceDir });
+	await spawnCommandOrThrow("git", ["config", "commit.gpgSign", "true"], { cwd: workspaceDir });
+	logger?.(`[fixbot] git: GPG signing enabled with key ${signingKey}`);
+	return true;
 }
 
 export async function getHeadCommit(workspaceDir: string): Promise<string> {
