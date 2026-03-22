@@ -2,6 +2,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createDaemonStatus, loadDaemonConfig } from "../config";
+import type { Logger } from "../logger";
 import { runJob } from "../runner";
 import type {
 	DaemonErrorSummary,
@@ -58,6 +59,8 @@ export interface StartedDaemon {
 
 export interface DaemonJobRunnerOptions {
 	resultsDir: string;
+	configModel?: import("../types").DaemonModelConfig;
+	logger?: Logger;
 }
 
 export type DaemonJobRunner = (job: NormalizedJobSpecV1, options: DaemonJobRunnerOptions) => Promise<JobResultV1>;
@@ -68,14 +71,14 @@ export type GitHubReporterFn = (
 	envelope: DaemonJobEnvelopeV1,
 	result: JobResultV1,
 	config: NormalizedDaemonConfigV1,
-	logger?: (message: string) => void,
+	logger?: Logger,
 ) => Promise<void>;
 
 export interface RunDaemonOptions {
 	configFilePath?: string;
 	signal?: AbortSignal;
 	installSignalHandlers?: boolean;
-	logger?: (message: string) => void;
+	logger?: Logger;
 	jobRunner?: DaemonJobRunner;
 	githubPoller?: GitHubPollerFn;
 	githubReporter?: GitHubReporterFn;
@@ -107,8 +110,8 @@ function buildErrorSummary(message: string, code: string): DaemonErrorSummary {
 	};
 }
 
-function renderLog(logger: RunDaemonOptions["logger"], message: string): void {
-	logger?.(`[fixbot] ${message}`);
+function renderLog(logger: Logger | undefined, message: string): void {
+	logger?.info(message);
 }
 
 function isAbortError(error: unknown): boolean {
@@ -161,7 +164,7 @@ function transitionStatus(
 	config: NormalizedDaemonConfigV1,
 	currentStatus: DaemonStatusV1,
 	fields: TransitionStatusFields,
-	logger?: (message: string) => void,
+	logger?: Logger,
 ): DaemonStatusV1 {
 	const nextStatus = mergeDaemonStatus(config, currentStatus, {
 		state: fields.state,
@@ -263,7 +266,7 @@ function publishHeartbeat(
 	pid: number,
 	startedAt: string,
 	configFilePath: string | undefined,
-	logger?: (message: string) => void,
+	logger?: Logger,
 	queueStatus?: DaemonStatusV1["queue"],
 ): DaemonStatusV1 {
 	const heartbeatAt = new Date().toISOString();
@@ -354,7 +357,7 @@ async function runClaimedDaemonJob(
 	configFilePath: string | undefined,
 	jobRunner: DaemonJobRunner,
 	recentResultsLimit: number,
-	logger?: (message: string) => void,
+	logger?: Logger,
 	githubReporter?: GitHubReporterFn,
 ): Promise<DaemonStatusV1> {
 	const jobStartedAt = new Date().toISOString();
@@ -397,6 +400,7 @@ async function runClaimedDaemonJob(
 		const result = await jobRunner(claimed.envelope.job, {
 			resultsDir: config.paths.resultsDir,
 			configModel: config.model,
+			logger,
 		});
 		removeActiveDaemonJob(config, claimed.envelope.jobId);
 		const recentResults = appendRecentResult(
@@ -413,13 +417,16 @@ async function runClaimedDaemonJob(
 			undefined,
 			buildQueueStatusFromSpool(config),
 		);
-		renderLog(logger, `completed job=${claimed.envelope.jobId} status=${result.status}`);
+		if (result.status === "success") {
+			logger?.success(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
+		} else {
+			logger?.warn(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
+		}
 		if (githubReporter) {
 			try {
 				await githubReporter(claimed.envelope, result, config, logger);
 			} catch (reportError) {
-				renderLog(
-					logger,
+				logger?.error(
 					`github-report error: ${reportError instanceof Error ? reportError.message : String(reportError)}`,
 				);
 			}
@@ -449,7 +456,7 @@ async function runClaimedDaemonJob(
 			undefined,
 			buildQueueStatusFromSpool(config),
 		);
-		renderLog(logger, `failed job=${claimed.envelope.jobId} message=${errorMessage}`);
+		logger?.error(`job runner failed — ${claimed.envelope.jobId}: ${errorMessage}`);
 		return transitionStatus(
 			config,
 			idleStatus,
@@ -580,7 +587,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 				);
 			} catch (error) {
 				const message = error instanceof Error ? error.message : String(error);
-				renderLog(logger, `failed to recover orphan ${orphan.envelope.jobId}: ${message}`);
+				logger?.error(`failed to recover orphan ${orphan.envelope.jobId}: ${message}`);
 				recoveryError = buildErrorSummary(
 					`failed to recover orphaned job ${orphan.envelope.jobId}: ${message}`,
 					"ORPHAN_RECOVERY_ERROR",
@@ -674,10 +681,9 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 							await resolveToken();
 							renderLog(logger, "app-auth: refreshed installation token");
 						} catch (refreshError) {
-							renderLog(
-								logger,
-								`app-auth: token refresh failed: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
-							);
+						logger?.error(
+							`app-auth: token refresh failed: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+						);
 						}
 					}
 					try {
@@ -689,7 +695,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 						lastGitHubPollMs = now;
 					} catch (error) {
 						const message = error instanceof Error ? error.message : String(error);
-						renderLog(logger, `github-poll error: ${message}`);
+					logger?.error(`github-poll error: ${message}`);
 						currentStatus = transitionStatus(
 							config,
 							currentStatus,
