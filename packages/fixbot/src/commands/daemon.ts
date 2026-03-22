@@ -30,7 +30,8 @@ export default class Daemon extends Command {
 			case "start": {
 				const { runDaemonFromConfigFile, startDaemonInBackground } = await import("../daemon/service");
 				if (flags.foreground) {
-					await runDaemonFromConfigFile(configPath, { logger: (msg) => console.log(msg) });
+					const { createStderrLogger } = await import("../logger");
+					await runDaemonFromConfigFile(configPath, { logger: createStderrLogger("daemon") });
 				} else {
 					await startDaemonInBackground(configPath);
 				}
