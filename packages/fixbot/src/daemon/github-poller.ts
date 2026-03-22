@@ -187,7 +187,7 @@ export function buildGitHubJobSpec(
 		jobId,
 		taskClass,
 		repo: { url: repoUrl, baseBranch },
-		execution: { mode: "process", timeoutMs: 600_000, memoryLimitMb: 4096 },
+		execution: { mode: "process", timeoutMs: 1_800_000, memoryLimitMb: 4096 },
 	};
 	if (taskClass === "fix_ci") {
 		spec.fixCi = { githubActionsRunId: runId };
