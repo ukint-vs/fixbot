@@ -105,10 +105,15 @@ export async function fetchGitHubUserIdentity(
 	const name = data.name?.trim() || data.login;
 	// Prefer the public email; fall back to the GitHub noreply address so the
 	// commit is still linked to the account even when the email is private.
-	const email =
-		data.email?.trim() ||
-		(data.id !== undefined ? `${data.id}+${data.login}@users.noreply.github.com` : `${data.login}@users.noreply.github.com`);
-	return { name, email };
+	const email = data.email?.trim();
+	if (email) {
+		return { name, email };
+	}
+	if (data.id !== undefined) {
+		return { name, email: `${data.id}+${data.login}@users.noreply.github.com` };
+	}
+	logger?.(`[fixbot] github-reporter: user ID not available to construct noreply email — falling back to generic identity`);
+	return null;
 }
 
 // ---------------------------------------------------------------------------
