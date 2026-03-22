@@ -21,6 +21,7 @@ import {
 } from "./git";
 import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
 import { assertDockerImageReady } from "./image";
+import { createStderrLogger, type Logger } from "./logger";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
 import {
 	EXECUTION_PLAN_VERSION_V1,
@@ -40,10 +41,8 @@ export interface RunJobOptions {
 	dockerImageVerifier?: () => Promise<string>;
 	/** Model override from daemon config — passed to resolveExecutionModel. */
 	configModel?: DaemonModelConfig;
-}
-
-function logProgress(message: string): void {
-	process.stderr.write(`[fixbot] ${message}\n`);
+	/** Structured logger. Defaults to a stderr logger scoped to "runner". */
+	logger?: Logger;
 }
 
 function writeJson(filePath: string, value: unknown): void {
@@ -79,7 +78,57 @@ function buildExecutionPlan(
 	};
 }
 
+/** Format milliseconds as a human-readable duration, e.g. "2m 18s" or "45s". */
+function formatDuration(ms: number): string {
+	const totalSeconds = Math.round(ms / 1000);
+	const hours = Math.floor(totalSeconds / 3600);
+	const minutes = Math.floor((totalSeconds % 3600) / 60);
+	const seconds = totalSeconds % 60;
+	if (hours > 0) return `${hours}h ${minutes}m ${seconds}s`;
+	if (minutes > 0) return `${minutes}m ${seconds}s`;
+	return `${seconds}s`;
+}
+
+/**
+ * Derive a short context label for the final summary line.
+ * For solve_issue: "solve_issue #42"; for fix_ci: "fix_ci run #999"; others: task class.
+ */
+function buildJobContext(job: NormalizedJobSpecV1): string {
+	if (job.taskClass === "solve_issue" && job.solveIssue?.issueNumber !== undefined) {
+		return `${job.taskClass} #${job.solveIssue.issueNumber}`;
+	}
+	if (job.taskClass === "fix_ci" && job.fixCi?.githubActionsRunId !== undefined) {
+		return `${job.taskClass} run #${job.fixCi.githubActionsRunId}`;
+	}
+	return job.taskClass;
+}
+
+/**
+ * Emit a one-line summary of the completed job.
+ * Example: Job abc123 complete — solve_issue #42 (3 files, 2m 18s, claude-sonnet-4-6)
+ */
+function logFinalSummary(logger: Logger, result: JobResultV1, job: NormalizedJobSpecV1): void {
+	const context = buildJobContext(job);
+	const duration = formatDuration(result.execution.durationMs);
+	const model = result.execution.selectedModel?.modelId ?? "unknown-model";
+	const files = result.diagnostics.changedFileCount;
+	const detail = `${files} file${files === 1 ? "" : "s"}, ${duration}, ${model}`;
+	const line = `Job ${result.jobId} complete \u2014 ${context} (${detail})`;
+
+	switch (result.status) {
+		case "success":
+			logger.success(line);
+			break;
+		case "timeout":
+			logger.warn(`${line} [timed out]`);
+			break;
+		default:
+			logger.error(line);
+	}
+}
+
 export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = {}): Promise<JobResultV1> {
+	const log = options.logger ?? createStderrLogger("runner");
 	const now = options.now ?? (() => new Date());
 	const startedAt = now();
 	const resultsDir = options.resultsDir ?? join(process.cwd(), "results");
@@ -87,8 +136,8 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	const dockerImageVerifier = options.dockerImageVerifier ?? (() => assertDockerImageReady());
 	const paths = getArtifactPaths(resultsDir, job.jobId);
 
-	logProgress(`starting job ${job.jobId} (${job.execution.mode})`);
-	logProgress(`results will be written under ${paths.artifactDir}`);
+	log.info(`starting job ${job.jobId} (${job.execution.mode})`);
+	log.info(`results will be written under ${paths.artifactDir}`);
 	resetArtifactDirectories(paths);
 	writeJson(paths.jobSpecFile, job);
 
@@ -108,16 +157,16 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 			provider: resolvedModel.provider,
 			modelId: resolvedModel.id,
 		};
-		logProgress(`preflight selected model ${resolvedModel.provider}/${resolvedModel.id}`);
+		log.info(`preflight selected model ${resolvedModel.provider}/${resolvedModel.id}`);
 		if (job.execution.mode === "docker") {
 			assertDockerGithubAuth();
 			await dockerImageVerifier();
 		}
-		logProgress(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
+		log.info(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
 		await cloneRepository(job.repo.url, job.repo.baseBranch, paths.workspaceDir);
 		await configureLocalGitIdentity(paths.workspaceDir);
 		baseCommit = await getHeadCommit(paths.workspaceDir);
-		logProgress(`repository cloned at ${baseCommit}`);
+		log.info(`repository cloned at ${baseCommit}`);
 		writeJson(paths.executionPlanFile, buildExecutionPlan(job, baseCommit, selectedModel));
 
 		const context: PreparedJobContext = {
@@ -127,16 +176,16 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 			hostConfig,
 			selectedModel,
 		};
-		logProgress("starting execution");
+		log.info("agent running");
 		executionOutput = await executor.execute(context);
-		logProgress("execution finished");
+		log.info("agent finished");
 	} catch (error) {
 		timedOut = error instanceof ExecutionTimeoutError;
 		executionError = error instanceof Error ? error.message : String(error);
-		logProgress(`execution failed: ${executionError}`);
+		log.error(`execution failed: ${executionError}`);
 	} finally {
 		if (existsSync(paths.workspaceDir)) {
-			logProgress("capturing workspace artifacts");
+			log.info("capturing workspace artifacts");
 			try {
 				headCommit = await getHeadCommit(paths.workspaceDir);
 			} catch {
@@ -250,7 +299,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	};
 
 	writeJson(paths.resultFile, result);
-	logProgress(`job ${job.jobId} completed with status ${status}`);
-	logProgress(`result JSON written to ${paths.resultFile}`);
+	logFinalSummary(log, result, job);
+	log.info(`result JSON written to ${paths.resultFile}`);
 	return result;
 }
