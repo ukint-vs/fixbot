@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { spawnCommandOrThrow } from "../command";
-import { configureLocalGitIdentity } from "../git";
+import { configureLocalGitIdentity, tryEnableGpgSigning } from "../git";
 import type { DaemonJobEnvelopeV1, DaemonSubmissionSourceV1, JobResultV1, NormalizedDaemonConfigV1 } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -74,6 +74,49 @@ export async function githubApiFetch(
 }
 
 // ---------------------------------------------------------------------------
+// GitHub user identity
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the authenticated user's name and email from the GitHub API.
+ * Returns null when the API call fails — callers must fall back gracefully.
+ *
+ * GitHub users who set their email to private will have a null email in
+ * the API response. In that case we use the `ID+login@users.noreply.github.com`
+ * format, which is still linked to the account and avoids leaking a private
+ * email into commit metadata.
+ */
+export async function fetchGitHubUserIdentity(
+	token: string,
+	logger?: (message: string) => void,
+): Promise<{ name: string; email: string } | null> {
+	let data: { login: string; id?: number; name?: string | null; email?: string | null };
+	try {
+		const response = await githubApiFetch("/user", {}, token, logger);
+		if (!response.ok) {
+			logger?.(`[fixbot] github-reporter: GET /user returned ${response.status} — falling back to generic identity`);
+			return null;
+		}
+		data = (await response.json()) as typeof data;
+	} catch (err) {
+		logger?.(`[fixbot] github-reporter: could not fetch user identity — ${String(err)}`);
+		return null;
+	}
+	const name = data.name?.trim() || data.login;
+	// Prefer the public email; fall back to the GitHub noreply address so the
+	// commit is still linked to the account even when the email is private.
+	const email = data.email?.trim();
+	if (email) {
+		return { name, email };
+	}
+	if (data.id !== undefined) {
+		return { name, email: `${data.id}+${data.login}@users.noreply.github.com` };
+	}
+	logger?.(`[fixbot] github-reporter: user ID not available to construct noreply email — falling back to generic identity`);
+	return null;
+}
+
+// ---------------------------------------------------------------------------
 // Git branch operations
 // ---------------------------------------------------------------------------
 
@@ -94,8 +137,20 @@ export async function createAndPushBranch(
 	repoUrl: string,
 	token: string,
 	logger?: (message: string) => void,
+	gpgKeyId?: string,
 ): Promise<void> {
-	await configureLocalGitIdentity(workspaceDir);
+	// Use the real GitHub user identity so commits are linked to the account
+	// and show the correct avatar on GitHub.
+	const identity = await fetchGitHubUserIdentity(token, logger);
+	if (identity) {
+		logger?.(`[fixbot] github-reporter: configuring git identity as ${identity.name} <${identity.email}>`);
+	} else {
+		logger?.("[fixbot] github-reporter: using fallback git identity");
+	}
+	await configureLocalGitIdentity(workspaceDir, identity ?? undefined);
+
+	// Enable GPG signing when a key is available. Non-fatal: log and continue.
+	await tryEnableGpgSigning(workspaceDir, gpgKeyId, logger);
 
 	await spawnCommandOrThrow("git", ["checkout", "-b", branchName], { cwd: workspaceDir });
 
@@ -374,7 +429,7 @@ export async function reportJobResult(
 			}
 		}
 
-		await createAndPushBranch(result.execution.workspaceDir, branchName, githubRepo, token, logger);
+		await createAndPushBranch(result.execution.workspaceDir, branchName, githubRepo, token, logger, config.github?.gpgKeyId);
 
 		const title = buildPRTitle(result, envelope.submission);
 		const prBody = buildPRBody(result, envelope.jobId, envelope.submission, config.identity.botUrl);

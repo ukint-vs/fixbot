@@ -257,15 +257,16 @@ function parseGitHubConfig(value: unknown, label: string): DaemonGitHubConfig {
 	const token = gh.token;
 	const pollIntervalMs = gh.pollIntervalMs;
 	const appAuth = gh.appAuth === undefined ? undefined : parseAppAuth(gh.appAuth, `${label}.appAuth`);
+	const gpgKeyId = gh.gpgKeyId;
 	return {
 		repos,
 		token: token === undefined ? undefined : assertNonEmptyString(token, `${label}.token`),
 		pollIntervalMs:
 			pollIntervalMs === undefined ? undefined : assertPositiveInteger(pollIntervalMs, `${label}.pollIntervalMs`),
 		appAuth,
+		gpgKeyId: gpgKeyId === undefined ? undefined : assertNonEmptyString(gpgKeyId, `${label}.gpgKeyId`),
 	};
 }
-
 function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGitHubConfig {
 	const parsed = parseGitHubConfig(raw, label);
 	return {
@@ -273,6 +274,7 @@ function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGit
 		token: parsed.token ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? undefined,
 		pollIntervalMs: parsed.pollIntervalMs ?? DEFAULT_GITHUB_POLL_INTERVAL_MS,
 		appAuth: parsed.appAuth,
+		gpgKeyId: parsed.gpgKeyId,
 	};
 }
 

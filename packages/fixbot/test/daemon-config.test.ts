@@ -425,6 +425,80 @@ describe("daemon config appAuth section", () => {
 	});
 });
 
+describe("daemon config gpgKeyId", () => {
+	it("parses gpgKeyId from github config", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+				github: {
+					repos: [
+						{
+							url: "https://github.com/owner/repo",
+							baseBranch: "main",
+							triggerLabel: "fixbot",
+						},
+					],
+					gpgKeyId: "ABCDEF1234567890",
+				},
+			}),
+			fixtureConfigPath,
+		);
+		expect(config.github!.gpgKeyId).toBe("ABCDEF1234567890");
+	});
+
+	it("gpgKeyId is undefined when not set", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+				github: {
+					repos: [
+						{
+							url: "https://github.com/owner/repo",
+							baseBranch: "main",
+							triggerLabel: "fixbot",
+						},
+					],
+				},
+			}),
+			fixtureConfigPath,
+		);
+		expect(config.github!.gpgKeyId).toBeUndefined();
+	});
+
+	it("rejects empty string gpgKeyId", () => {
+		expect(() =>
+			parseDaemonConfigText(
+				JSON.stringify({
+					version: "fixbot.daemon-config/v1",
+					paths: {
+						stateDir: "./runtime/state",
+						resultsDir: "./runtime/results",
+					},
+					github: {
+						repos: [
+							{
+								url: "https://github.com/owner/repo",
+								baseBranch: "main",
+								triggerLabel: "fixbot",
+							},
+						],
+						gpgKeyId: "",
+					},
+				}),
+				fixtureConfigPath,
+			),
+		).toThrow();
+	});
+});
+
 describe("parseDaemonSubmissionSource via status parsing", () => {
 	it("accepts github-label submission kind in daemon status", () => {
 		const config = parseDaemonConfigText(
