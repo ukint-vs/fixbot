@@ -4,6 +4,7 @@ import { resolve } from "node:path";
 import { createDaemonStatus, loadDaemonConfig } from "../config";
 import { type Logger, toLogCallback } from "../logger";
 import { runJob } from "../runner";
+import { cleanupWorktree, deriveRepoCacheKey } from "../repo-cache";
 import type {
 	DaemonErrorSummary,
 	DaemonJobEnvelopeV1,
@@ -12,6 +13,7 @@ import type {
 	JobResultV1,
 	NormalizedDaemonConfigV1,
 	NormalizedJobSpecV1,
+	RepoCacheConfig,
 } from "../types";
 import { exchangeInstallationToken, isTokenExpiringSoon, type TokenCache } from "./github-app-auth";
 import type { GitHubPollResult } from "./github-poller";
@@ -61,6 +63,7 @@ export interface DaemonJobRunnerOptions {
 	resultsDir: string;
 	configModel?: import("../types").DaemonModelConfig;
 	logger?: Logger;
+	repoCacheConfig?: RepoCacheConfig;
 }
 
 export type DaemonJobRunner = (job: NormalizedJobSpecV1, options: DaemonJobRunnerOptions) => Promise<JobResultV1>;
@@ -401,6 +404,7 @@ async function runClaimedDaemonJob(
 			resultsDir: config.paths.resultsDir,
 			configModel: config.model,
 			logger,
+			repoCacheConfig: config.repoCache,
 		});
 		removeActiveDaemonJob(config, claimed.envelope.jobId);
 		const recentResults = appendRecentResult(
@@ -470,6 +474,20 @@ async function runClaimedDaemonJob(
 		);
 	} finally {
 		clearInterval(heartbeatTimer);
+
+		// Clean up worktree if repo-cache was used.
+		if (config.repoCache?.enabled) {
+			try {
+				const { owner, repo } = deriveRepoCacheKey(claimed.envelope.job.repo.url);
+				const { join } = await import("node:path");
+				const bareDir = join(config.repoCache.dir, owner, `${repo}.git`);
+				await cleanupWorktree(bareDir, claimed.envelope.jobId, logger ? (msg) => logger.info(msg) : undefined);
+			} catch (cleanupErr) {
+				logger?.warn(
+					`repo-cache: worktree cleanup failed for job ${claimed.envelope.jobId}: ${cleanupErr instanceof Error ? cleanupErr.message : String(cleanupErr)}`,
+				);
+			}
+		}
 	}
 }
 

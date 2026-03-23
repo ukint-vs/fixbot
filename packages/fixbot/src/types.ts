@@ -271,6 +271,7 @@ export interface DaemonConfigV1 {
 	github?: DaemonGitHubConfig;
 	identity?: { botUrl?: string };
 	model?: DaemonModelConfig;
+	repoCache?: Partial<RepoCacheConfig>;
 }
 
 export interface DaemonResolvedPaths {
@@ -300,6 +301,7 @@ export interface NormalizedDaemonConfigV1 {
 	github?: NormalizedDaemonGitHubConfig;
 	identity: { botUrl: string };
 	model?: DaemonModelConfig;
+	repoCache?: RepoCacheConfig;
 }
 
 export interface DaemonErrorSummary {
@@ -392,4 +394,22 @@ export interface DaemonStatusSnapshotV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+}
+
+// ---------------------------------------------------------------------------
+// Repository cache types
+// ---------------------------------------------------------------------------
+
+export interface RepoCacheConfig {
+	enabled: boolean;
+	dir: string;
+	maxRepos: number;
+	maxDiskMb: number;
+	staleBranchDays: number;
+}
+
+export interface RepoCacheStats {
+	repos: number;
+	activeWorktrees: number;
+	diskUsageMb: number;
 }

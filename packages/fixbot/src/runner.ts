@@ -23,6 +23,7 @@ import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
 import { assertDockerImageReady } from "./image";
 import { createStderrLogger, type Logger } from "./logger";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
+import { getOrCreateWorkspace, type WorkspaceResult } from "./repo-cache";
 import {
 	EXECUTION_PLAN_VERSION_V1,
 	type ExecutionOutputV1,
@@ -32,6 +33,7 @@ import {
 	type ModelSelection,
 	type DaemonModelConfig,
 	type NormalizedJobSpecV1,
+	type RepoCacheConfig,
 } from "./types";
 
 export interface RunJobOptions {
@@ -43,6 +45,8 @@ export interface RunJobOptions {
 	configModel?: DaemonModelConfig;
 	/** Structured logger. Defaults to a stderr logger scoped to "runner". */
 	logger?: Logger;
+	/** When set, use the repo cache (bare clone + worktrees) instead of a fresh shallow clone. */
+	repoCacheConfig?: RepoCacheConfig;
 }
 
 function writeJson(filePath: string, value: unknown): void {
@@ -149,6 +153,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	let gitStatusText = "";
 	let patchText = "";
 	let selectedModel: ModelSelection | undefined;
+	let cacheResult: WorkspaceResult | undefined;
 
 	try {
 		const hostConfig = resolveHostAgentConfig();
@@ -162,11 +167,40 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 			assertDockerGithubAuth();
 			await dockerImageVerifier();
 		}
-		log.info(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
-		await cloneRepository(job.repo.url, job.repo.baseBranch, paths.workspaceDir);
+
+		// Obtain workspace: repo-cache (bare clone + worktree) or fresh shallow clone.
+		const cacheConfig = options.repoCacheConfig;
+		if (cacheConfig?.enabled) {
+			try {
+				log.info(`repo-cache: preparing workspace for ${job.repo.url} @ ${job.repo.baseBranch}`);
+				cacheResult = await getOrCreateWorkspace({
+					repoUrl: job.repo.url,
+					baseBranch: job.repo.baseBranch,
+					jobId: job.jobId,
+					config: cacheConfig,
+					logger: (msg) => log.info(msg),
+				});
+				// Override the workspace dir to the worktree location.
+				(paths as { workspaceDir: string }).workspaceDir = cacheResult.workspaceDir;
+				log.info(
+					`repo-cache: workspace ready at ${cacheResult.workspaceDir} (fromCache=${cacheResult.fromCache})`,
+				);
+			} catch (cacheError) {
+				log.warn(
+					`repo-cache: failed, falling back to fresh clone: ${cacheError instanceof Error ? cacheError.message : String(cacheError)}`,
+				);
+				cacheResult = undefined;
+			}
+		}
+
+		if (!cacheResult) {
+			log.info(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
+			await cloneRepository(job.repo.url, job.repo.baseBranch, paths.workspaceDir);
+		}
+
 		await configureLocalGitIdentity(paths.workspaceDir);
 		baseCommit = await getHeadCommit(paths.workspaceDir);
-		log.info(`repository cloned at ${baseCommit}`);
+		log.info(`repository ready at ${baseCommit}`);
 		writeJson(paths.executionPlanFile, buildExecutionPlan(job, baseCommit, selectedModel));
 
 		const context: PreparedJobContext = {
