@@ -549,3 +549,170 @@ describe("parseDaemonSubmissionSource via status parsing", () => {
 		});
 	});
 });
+
+describe("daemon config webhook section", () => {
+	it("parses and normalizes a valid webhook config section", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+				webhook: {
+					enabled: true,
+					port: 9090,
+					secret: "whsec_test123",
+					rateLimitPerRepoPerMin: 20,
+				},
+			}),
+			fixtureConfigPath,
+		);
+
+		expect(config.webhook).toBeDefined();
+		expect(config.webhook!.enabled).toBe(true);
+		expect(config.webhook!.port).toBe(9090);
+		expect(config.webhook!.secret).toBe("whsec_test123");
+		expect(config.webhook!.rateLimitPerRepoPerMin).toBe(20);
+	});
+
+	it("defaults port and rateLimitPerRepoPerMin when omitted", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+				webhook: {
+					enabled: true,
+					secret: "whsec_test123",
+				},
+			}),
+			fixtureConfigPath,
+		);
+
+		expect(config.webhook).toBeDefined();
+		expect(config.webhook!.port).toBe(8787);
+		expect(config.webhook!.rateLimitPerRepoPerMin).toBe(10);
+	});
+
+	it("defaults enabled to false when omitted", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+				webhook: {
+					secret: "whsec_test123",
+				},
+			}),
+			fixtureConfigPath,
+		);
+
+		expect(config.webhook).toBeDefined();
+		expect(config.webhook!.enabled).toBe(false);
+	});
+
+	it("rejects webhook config with missing secret", () => {
+		const invalid = JSON.stringify({
+			version: "fixbot.daemon-config/v1",
+			paths: {
+				stateDir: "./runtime/state",
+				resultsDir: "./runtime/results",
+			},
+			webhook: {
+				enabled: true,
+			},
+		});
+
+		expect(() => parseDaemonConfigText(invalid, fixtureConfigPath)).toThrow(
+			`${fixtureConfigPath}.webhook.secret must be a non-empty string`,
+		);
+	});
+
+	it("rejects webhook config with invalid port", () => {
+		const invalid = JSON.stringify({
+			version: "fixbot.daemon-config/v1",
+			paths: {
+				stateDir: "./runtime/state",
+				resultsDir: "./runtime/results",
+			},
+			webhook: {
+				enabled: true,
+				secret: "whsec_test123",
+				port: 0,
+			},
+		});
+
+		expect(() => parseDaemonConfigText(invalid, fixtureConfigPath)).toThrow(
+			`${fixtureConfigPath}.webhook.port must be a positive integer`,
+		);
+	});
+
+	it("parses config without webhook section (backward compatibility)", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+			}),
+			fixtureConfigPath,
+		);
+
+		expect(config.webhook).toBeUndefined();
+	});
+});
+
+describe("parseDaemonSubmissionSource via status parsing (github-webhook)", () => {
+	it("accepts github-webhook submission kind in daemon status", () => {
+		const config = parseDaemonConfigText(
+			JSON.stringify({
+				version: "fixbot.daemon-config/v1",
+				paths: {
+					stateDir: "./runtime/state",
+					resultsDir: "./runtime/results",
+				},
+			}),
+			fixtureConfigPath,
+		);
+
+		const status = normalizeDaemonStatus(
+			{
+				version: "fixbot.daemon-status/v1",
+				state: "idle",
+				lastTransitionAt: "2026-03-16T08:00:00.000Z",
+				paths: config.paths,
+				queue: {
+					depth: 1,
+					preview: [
+						{
+							jobId: "wh-abc123",
+							enqueuedAt: "2026-03-16T08:00:00.000Z",
+							submission: {
+								kind: "github-webhook",
+								githubRepo: "owner/repo",
+								githubIssueNumber: 42,
+								githubDeliveryId: "delivery-uuid-123",
+							},
+						},
+					],
+					previewTruncated: false,
+				},
+				recentResults: [],
+			},
+			"test-status",
+		);
+
+		expect(status.queue.preview[0].submission).toEqual({
+			kind: "github-webhook",
+			githubRepo: "owner/repo",
+			githubIssueNumber: 42,
+			githubDeliveryId: "delivery-uuid-123",
+		});
+	});
+});

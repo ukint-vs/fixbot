@@ -58,7 +58,7 @@ export class DuplicateDaemonJobError extends Error {
 	}
 }
 
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label"]);
+const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-webhook"]);
 
 function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 {
 	const submission = assertObject(value, label);
@@ -71,11 +71,12 @@ function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionS
 		kind: kind as DaemonSubmissionKind,
 		filePath: filePath === undefined ? undefined : assertNonEmptyString(filePath, `${label}.filePath`),
 	};
-	if (kind === "github-label") {
+	if (kind === "github-label" || kind === "github-webhook") {
 		const githubRepo = submission.githubRepo;
 		const githubIssueNumber = submission.githubIssueNumber;
 		const githubLabelName = submission.githubLabelName;
 		const githubActionsRunId = submission.githubActionsRunId;
+		const githubDeliveryId = submission.githubDeliveryId;
 		if (githubRepo !== undefined) {
 			result.githubRepo = assertNonEmptyString(githubRepo, `${label}.githubRepo`);
 		}
@@ -87,6 +88,9 @@ function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionS
 		}
 		if (githubActionsRunId !== undefined) {
 			result.githubActionsRunId = assertPositiveInteger(githubActionsRunId, `${label}.githubActionsRunId`);
+		}
+		if (githubDeliveryId !== undefined) {
+			result.githubDeliveryId = assertNonEmptyString(githubDeliveryId, `${label}.githubDeliveryId`);
 		}
 	}
 	return result;

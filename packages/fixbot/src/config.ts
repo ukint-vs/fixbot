@@ -19,6 +19,7 @@ import {
 	type NormalizedDaemonConfigV1,
 	type NormalizedDaemonGitHubConfig,
 	type NormalizedDaemonGitHubRepoConfig,
+	type NormalizedDaemonWebhookConfig,
 	type ResultStatus,
 	TASK_CLASSES,
 	type TaskClass,
@@ -78,8 +79,10 @@ function parseDaemonErrorSummary(value: unknown, label: string): DaemonErrorSumm
 }
 
 export const DEFAULT_GITHUB_POLL_INTERVAL_MS = 60_000;
+export const DEFAULT_WEBHOOK_PORT = 8787;
+export const DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN = 10;
 
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label"]);
+const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-webhook"]);
 
 function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 | undefined {
 	if (value === undefined) {
@@ -95,11 +98,12 @@ function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmi
 		kind: kind as DaemonSubmissionKind,
 		filePath: filePath === undefined ? undefined : assertNonEmptyString(filePath, `${label}.filePath`),
 	};
-	if (kind === "github-label") {
+	if (kind === "github-label" || kind === "github-webhook") {
 		const githubRepo = submission.githubRepo;
 		const githubIssueNumber = submission.githubIssueNumber;
 		const githubLabelName = submission.githubLabelName;
 		const githubActionsRunId = submission.githubActionsRunId;
+		const githubDeliveryId = submission.githubDeliveryId;
 		if (githubRepo !== undefined) {
 			result.githubRepo = assertNonEmptyString(githubRepo, `${label}.githubRepo`);
 		}
@@ -111,6 +115,9 @@ function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmi
 		}
 		if (githubActionsRunId !== undefined) {
 			result.githubActionsRunId = assertPositiveInteger(githubActionsRunId, `${label}.githubActionsRunId`);
+		}
+		if (githubDeliveryId !== undefined) {
+			result.githubDeliveryId = assertNonEmptyString(githubDeliveryId, `${label}.githubDeliveryId`);
 		}
 	}
 	return result;
@@ -258,6 +265,7 @@ function parseGitHubConfig(value: unknown, label: string): DaemonGitHubConfig {
 	const pollIntervalMs = gh.pollIntervalMs;
 	const appAuth = gh.appAuth === undefined ? undefined : parseAppAuth(gh.appAuth, `${label}.appAuth`);
 	const gpgKeyId = gh.gpgKeyId;
+	const botUsername = gh.botUsername;
 	return {
 		repos,
 		token: token === undefined ? undefined : assertNonEmptyString(token, `${label}.token`),
@@ -265,6 +273,7 @@ function parseGitHubConfig(value: unknown, label: string): DaemonGitHubConfig {
 			pollIntervalMs === undefined ? undefined : assertPositiveInteger(pollIntervalMs, `${label}.pollIntervalMs`),
 		appAuth,
 		gpgKeyId: gpgKeyId === undefined ? undefined : assertNonEmptyString(gpgKeyId, `${label}.gpgKeyId`),
+		botUsername: botUsername === undefined ? undefined : assertNonEmptyString(botUsername, `${label}.botUsername`),
 	};
 }
 function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGitHubConfig {
@@ -275,7 +284,17 @@ function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGit
 		pollIntervalMs: parsed.pollIntervalMs ?? DEFAULT_GITHUB_POLL_INTERVAL_MS,
 		appAuth: parsed.appAuth,
 		gpgKeyId: parsed.gpgKeyId,
+		botUsername: parsed.botUsername,
 	};
+}
+
+function normalizeWebhookConfig(raw: unknown, label: string): NormalizedDaemonWebhookConfig {
+	const wh = assertObject(raw, label);
+	const enabled = wh.enabled === undefined ? false : assertBoolean(wh.enabled, `${label}.enabled`);
+	const port = wh.port === undefined ? DEFAULT_WEBHOOK_PORT : assertPositiveInteger(wh.port, `${label}.port`);
+	const secret = assertNonEmptyString(wh.secret, `${label}.secret`);
+	const rateLimitPerRepoPerMin = wh.rateLimitPerRepoPerMin === undefined ? DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN : assertPositiveInteger(wh.rateLimitPerRepoPerMin, `${label}.rateLimitPerRepoPerMin`);
+	return { enabled, port, secret, rateLimitPerRepoPerMin };
 }
 
 export function normalizeDaemonConfig(value: unknown, source: string = "daemon config"): NormalizedDaemonConfigV1 {
@@ -343,6 +362,7 @@ export function normalizeDaemonConfig(value: unknown, source: string = "daemon c
 		github,
 		identity: { botUrl },
 		model,
+		webhook: root.webhook === undefined ? undefined : normalizeWebhookConfig(root.webhook, `${source}.webhook`),
 	};
 }
 

@@ -6,6 +6,8 @@ export {
 	DEFAULT_DAEMON_PID_FILE,
 	DEFAULT_DAEMON_STATUS_FILE,
 	DEFAULT_GITHUB_POLL_INTERVAL_MS,
+	DEFAULT_WEBHOOK_PORT,
+	DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN,
 	loadDaemonConfig,
 	normalizeDaemonConfig,
 	normalizeDaemonStatus,
@@ -117,3 +119,12 @@ export {
 export { parseResultMarkers } from "./markers";
 export { runJob } from "./runner";
 export * from "./types";
+export {
+	createWebhookServer,
+	findRepoConfig,
+	routeWebhookEvent,
+	SlidingWindowRateLimiter,
+	verifyWebhookSignature,
+	type WebhookServer,
+	type WebhookServerOptions,
+} from "./daemon/webhook-server";

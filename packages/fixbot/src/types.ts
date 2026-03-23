@@ -15,7 +15,7 @@ export type ExecutionMode = "process" | "docker";
 export type SandboxMode = "workspace-write" | "read-only";
 export type DaemonLifecycleState = (typeof DAEMON_LIFECYCLE_STATES)[number];
 export type DaemonStatusFormat = "json";
-export type DaemonSubmissionKind = "cli" | "github-label";
+export type DaemonSubmissionKind = "cli" | "github-label" | "github-webhook";
 
 export interface RepoTarget {
 	url: string;
@@ -245,6 +245,8 @@ export interface DaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** GPG key ID (fingerprint or email) used for signing commits. When omitted, signing is attempted only if git's global user.signingKey is set. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. When set, issues assigned to this user trigger solve_issue jobs. */
+	botUsername?: string;
 }
 
 export interface NormalizedDaemonGitHubRepoConfig {
@@ -261,6 +263,8 @@ export interface NormalizedDaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** Normalized from DaemonGitHubConfig.gpgKeyId. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. When set, issues assigned to this user trigger solve_issue jobs. */
+	botUsername?: string;
 }
 
 export interface DaemonConfigV1 {
@@ -271,6 +275,7 @@ export interface DaemonConfigV1 {
 	github?: DaemonGitHubConfig;
 	identity?: { botUrl?: string };
 	model?: DaemonModelConfig;
+	webhook?: DaemonWebhookConfig;
 }
 
 export interface DaemonResolvedPaths {
@@ -300,6 +305,7 @@ export interface NormalizedDaemonConfigV1 {
 	github?: NormalizedDaemonGitHubConfig;
 	identity: { botUrl: string };
 	model?: DaemonModelConfig;
+	webhook?: NormalizedDaemonWebhookConfig;
 }
 
 export interface DaemonErrorSummary {
@@ -315,6 +321,7 @@ export interface DaemonSubmissionSourceV1 {
 	githubIssueNumber?: number;
 	githubLabelName?: string;
 	githubActionsRunId?: number;
+	githubDeliveryId?: string;
 }
 
 export interface DaemonJobArtifactSummaryV1 {
@@ -392,4 +399,24 @@ export interface DaemonStatusSnapshotV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+}
+
+export interface DaemonWebhookConfig {
+	enabled?: boolean;
+	port?: number;
+	secret?: string;
+	rateLimitPerRepoPerMin?: number;
+}
+export interface NormalizedDaemonWebhookConfig {
+	enabled: boolean;
+	port: number;
+	secret: string;
+	rateLimitPerRepoPerMin: number;
+}
+export interface WebhookHealthMetrics {
+	receivedCount: number;
+	acceptedCount: number;
+	rejectedCount: number;
+	rateLimitedCount: number;
+	lastReceivedAt: string | null;
 }
