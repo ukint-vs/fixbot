@@ -22,6 +22,7 @@ import {
 import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
 import { assertDockerImageReady } from "./image";
 import { createStderrLogger, type Logger } from "./logger";
+import { recordLearning } from "./learnings";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
 import {
 	EXECUTION_PLAN_VERSION_V1,
@@ -79,7 +80,7 @@ function buildExecutionPlan(
 }
 
 /** Format milliseconds as a human-readable duration, e.g. "2m 18s" or "45s". */
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
 	const totalSeconds = Math.round(ms / 1000);
 	const hours = Math.floor(totalSeconds / 3600);
 	const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -300,6 +301,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 
 	writeJson(paths.resultFile, result);
 	logFinalSummary(log, result, job);
+	recordLearning(result, log);
 	log.info(`result JSON written to ${paths.resultFile}`);
 	return result;
 }
