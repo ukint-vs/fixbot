@@ -117,6 +117,7 @@ export interface ExecutionPlanV1 {
 	job: NormalizedJobSpecV1;
 	baseCommit: string;
 	selectedModel: ModelSelection;
+	repoExcludePaths?: string[];
 }
 
 export interface ModelSelection {
@@ -392,4 +393,18 @@ export interface DaemonStatusSnapshotV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+}
+
+// ---------------------------------------------------------------------------
+// Per-repo configuration types
+// ---------------------------------------------------------------------------
+
+export interface RepoModelConfig {
+	provider: string;
+	modelId: string;
+}
+
+export interface RepoConfig {
+	model?: RepoModelConfig;
+	excludePaths?: string[];
 }

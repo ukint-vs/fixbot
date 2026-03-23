@@ -140,7 +140,7 @@ export function getConfiguredAuthFilePath(): string | undefined {
 	return hostConfig.authFileExists ? hostConfig.authFilePath : undefined;
 }
 
-export function buildInjectedContext(job: NormalizedJobSpecV1, selectedModel: ModelSelection): string {
+export function buildInjectedContext(job: NormalizedJobSpecV1, selectedModel: ModelSelection, repoExcludePaths?: string[]): string {
 	const modelLine = job.execution.model
 		? `${job.execution.model.provider}/${job.execution.model.modelId}`
 		: "default model selection";
@@ -213,6 +213,16 @@ export function buildInjectedContext(job: NormalizedJobSpecV1, selectedModel: Mo
 		"- Do not ask the user for follow-up input.",
 		"- If blocked, return `FIXBOT_RESULT: failed` with a precise reason.",
 	);
+
+	if (repoExcludePaths && repoExcludePaths.length > 0) {
+		sharedLines.push(
+			"",
+			"## Excluded Paths",
+			"",
+			"Do not read or modify files matching these patterns:",
+			...repoExcludePaths.map((p) => `- \`${p}\``),
+		);
+	}
 
 	return sharedLines.join("\n");
 }
@@ -557,7 +567,7 @@ export async function runInternalExecutionFromPlan(
 	if (!existsSync(assistantFinalFile)) {
 		writeFileSync(assistantFinalFile, "", "utf-8");
 	}
-	writeFileSync(injectedContextFile, buildInjectedContext(plan.job, plan.selectedModel), "utf-8");
+	writeFileSync(injectedContextFile, buildInjectedContext(plan.job, plan.selectedModel, plan.repoExcludePaths), "utf-8");
 
 	try {
 		const prompt = buildGitFixPrompt(plan.job);
