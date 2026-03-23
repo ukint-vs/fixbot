@@ -58,7 +58,7 @@ export class DuplicateDaemonJobError extends Error {
 	}
 }
 
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label"]);
+const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-assignment"]);
 
 function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 {
 	const submission = assertObject(value, label);
@@ -71,7 +71,7 @@ function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionS
 		kind: kind as DaemonSubmissionKind,
 		filePath: filePath === undefined ? undefined : assertNonEmptyString(filePath, `${label}.filePath`),
 	};
-	if (kind === "github-label") {
+	if (kind === "github-label" || kind === "github-assignment") {
 		const githubRepo = submission.githubRepo;
 		const githubIssueNumber = submission.githubIssueNumber;
 		const githubLabelName = submission.githubLabelName;

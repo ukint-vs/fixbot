@@ -32,8 +32,15 @@ export {
 	type TokenCache,
 } from "./daemon/github-app-auth";
 export {
+	type AckCommentResult,
+	deleteAckComment,
 	deriveGitHubJobId,
+	fetchAssignedIssues,
+	fetchIssuesWithFilter,
+	type GitHubCancelFn,
+	type GitHubIssueSummary,
 	pollGitHubRepos,
+	validateBotUsername,
 } from "./daemon/github-poller";
 export {
 	buildFailureCommentBody,

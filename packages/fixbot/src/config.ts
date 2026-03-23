@@ -79,7 +79,7 @@ function parseDaemonErrorSummary(value: unknown, label: string): DaemonErrorSumm
 
 export const DEFAULT_GITHUB_POLL_INTERVAL_MS = 60_000;
 
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label"]);
+const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-assignment"]);
 
 function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 | undefined {
 	if (value === undefined) {
@@ -95,7 +95,7 @@ function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmi
 		kind: kind as DaemonSubmissionKind,
 		filePath: filePath === undefined ? undefined : assertNonEmptyString(filePath, `${label}.filePath`),
 	};
-	if (kind === "github-label") {
+	if (kind === "github-label" || kind === "github-assignment") {
 		const githubRepo = submission.githubRepo;
 		const githubIssueNumber = submission.githubIssueNumber;
 		const githubLabelName = submission.githubLabelName;
@@ -258,6 +258,7 @@ function parseGitHubConfig(value: unknown, label: string): DaemonGitHubConfig {
 	const pollIntervalMs = gh.pollIntervalMs;
 	const appAuth = gh.appAuth === undefined ? undefined : parseAppAuth(gh.appAuth, `${label}.appAuth`);
 	const gpgKeyId = gh.gpgKeyId;
+	const botUsername = gh.botUsername;
 	return {
 		repos,
 		token: token === undefined ? undefined : assertNonEmptyString(token, `${label}.token`),
@@ -265,6 +266,7 @@ function parseGitHubConfig(value: unknown, label: string): DaemonGitHubConfig {
 			pollIntervalMs === undefined ? undefined : assertPositiveInteger(pollIntervalMs, `${label}.pollIntervalMs`),
 		appAuth,
 		gpgKeyId: gpgKeyId === undefined ? undefined : assertNonEmptyString(gpgKeyId, `${label}.gpgKeyId`),
+		botUsername: botUsername === undefined ? undefined : assertNonEmptyString(botUsername, `${label}.botUsername`),
 	};
 }
 function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGitHubConfig {
@@ -275,6 +277,7 @@ function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGit
 		pollIntervalMs: parsed.pollIntervalMs ?? DEFAULT_GITHUB_POLL_INTERVAL_MS,
 		appAuth: parsed.appAuth,
 		gpgKeyId: parsed.gpgKeyId,
+		botUsername: parsed.botUsername,
 	};
 }
 
