@@ -12,11 +12,13 @@ import type {
 	JobResultV1,
 	NormalizedDaemonConfigV1,
 	NormalizedJobSpecV1,
+	RetryStats,
 } from "../types";
 import { exchangeInstallationToken, isTokenExpiringSoon, type TokenCache } from "./github-app-auth";
 import type { GitHubPollResult } from "./github-poller";
 import { pollGitHubRepos } from "./github-poller";
-import { reportJobResult } from "./github-reporter";
+import { reportJobResult, buildFinalFailureCommentBody } from "./github-reporter";
+import { handleJobFailure, isSuccessWithChanges } from "./retry";
 import {
 	buildQueueStatusFromSpool,
 	type ClaimedDaemonJobRecord,
@@ -357,6 +359,7 @@ async function runClaimedDaemonJob(
 	configFilePath: string | undefined,
 	jobRunner: DaemonJobRunner,
 	recentResultsLimit: number,
+	retryStats: RetryStats,
 	logger?: Logger,
 	githubReporter?: GitHubReporterFn,
 ): Promise<DaemonStatusV1> {
@@ -417,19 +420,36 @@ async function runClaimedDaemonJob(
 			undefined,
 			buildQueueStatusFromSpool(config),
 		);
-		if (result.status === "success") {
-			logger?.success(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
-		} else {
-			logger?.warn(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
-		}
+		// Run the GitHub reporter before logging outcome so we know if it failed.
+		let reporterError: Error | undefined;
 		if (githubReporter) {
 			try {
 				await githubReporter(claimed.envelope, result, config, logger ? toLogCallback(logger) : undefined);
-			} catch (reportError) {
-				logger?.error(
-					`github-report error: ${reportError instanceof Error ? reportError.message : String(reportError)}`,
-				);
+			} catch (err) {
+				reporterError = err instanceof Error ? err : new Error(String(err));
+				logger?.error(`github-report error: ${reporterError.message}`);
 			}
+		}
+
+		// Log based on result + reporter outcome.
+		if (result.status === "success" && !reporterError) {
+			logger?.success(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
+		} else if (result.status === "success") {
+			logger?.warn(`job complete — ${claimed.envelope.jobId} status=${result.status} (reporter failed)`);
+		} else {
+			logger?.warn(`job complete — ${claimed.envelope.jobId} status=${result.status}`);
+		}
+
+		// Handle retry if the job or reporter failed.
+		if (result.status !== "success") {
+			const retryResult = handleJobFailure(claimed.envelope, result, undefined, config, logger ? toLogCallback(logger) : undefined);
+			if (retryResult.retried) retryStats.retriesScheduled++;
+			else retryStats.retriesExhausted++;
+		}
+		if (reporterError && isSuccessWithChanges(result)) {
+			const retryResult = handleJobFailure(claimed.envelope, result, reporterError, config, logger ? toLogCallback(logger) : undefined);
+			if (retryResult.retried) retryStats.retriesScheduled++;
+			else retryStats.retriesExhausted++;
 		}
 		return transitionStatus(
 			config,
@@ -444,6 +464,9 @@ async function runClaimedDaemonJob(
 		);
 	} catch (error) {
 		removeActiveDaemonJob(config, claimed.envelope.jobId);
+		const retryResult = handleJobFailure(claimed.envelope, undefined, error instanceof Error ? error : new Error(String(error)), config, logger ? toLogCallback(logger) : undefined);
+		if (retryResult.retried) retryStats.retriesScheduled++;
+		else retryStats.retriesExhausted++;
 		const recentResult = createRunnerFailureResult(claimed.envelope, jobStartedAt, error);
 		const recentResults = appendRecentResult(currentStatus.recentResults, recentResult, recentResultsLimit);
 		const errorMessage = error instanceof Error ? error.message : String(error);
@@ -639,6 +662,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 			await resolveToken();
 		}
 
+		const retryStats: RetryStats = { retriesScheduled: 0, retriesExhausted: 0 };
 		let lastHeartbeatMs = Date.parse(startedAt);
 		while (!shuttingDown) {
 			const claimed = claimNextQueuedDaemonJob(config);
@@ -652,6 +676,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 					options.configFilePath,
 					jobRunner,
 					recentResultsLimit,
+					retryStats,
 					logger,
 					activeGitHubReporter,
 				);

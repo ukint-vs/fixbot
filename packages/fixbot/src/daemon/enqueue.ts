@@ -11,6 +11,7 @@ import {
 } from "../types";
 import type { QueuedDaemonJobRecord } from "./job-store";
 import { buildQueueStatusFromSpool, enqueueDaemonJob } from "./job-store";
+import { DEFAULT_MAX_RETRIES } from "./retry";
 import {
 	type DaemonInspection,
 	inspectDaemon,
@@ -55,6 +56,8 @@ export function createDaemonJobEnvelope(
 			artifactDir: artifactPaths.artifactDir,
 			resultFile: artifactPaths.resultFile,
 		},
+		retryCount: 0,
+		maxRetries: DEFAULT_MAX_RETRIES,
 	};
 }
 
