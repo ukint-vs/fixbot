@@ -116,4 +116,12 @@ export {
 } from "./internal-runner";
 export { parseResultMarkers } from "./markers";
 export { runJob } from "./runner";
+export {
+	computeRepoStats,
+	formatDuration,
+	formatElapsed,
+	formatStatusDashboard,
+	formatUptime,
+	type RepoStats,
+} from "./daemon/status-formatter";
 export * from "./types";
