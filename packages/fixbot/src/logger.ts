@@ -85,9 +85,10 @@ export function createNoopLogger(): Logger {
  */
 export function toLogCallback(logger: Logger): (message: string) => void {
 	return (message: string) => {
-		if (message.includes("error") || message.includes("ERROR")) {
+		// Match explicit level tags used in legacy messages, not substrings like "errors=0"
+		if (/ error[:= ]| error$/i.test(message) || message.includes("-poll error:") || message.includes("-report error:")) {
 			logger.error(message);
-		} else if (message.includes("warn") || message.includes("WARN")) {
+		} else if (/ warn[:= ]| warn$/i.test(message) || message.includes("-poll warn:") || message.includes("-report warn:")) {
 			logger.warn(message);
 		} else {
 			logger.info(message);
