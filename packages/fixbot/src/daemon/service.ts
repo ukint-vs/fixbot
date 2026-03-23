@@ -13,6 +13,8 @@ import type {
 	NormalizedDaemonConfigV1,
 	NormalizedJobSpecV1,
 } from "../types";
+import { pollPRComments } from "./comment-poller";
+import { addressComments } from "./comment-addresser";
 import { exchangeInstallationToken, isTokenExpiringSoon, type TokenCache } from "./github-app-auth";
 import type { GitHubPollResult } from "./github-poller";
 import { pollGitHubRepos } from "./github-poller";
@@ -706,6 +708,34 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 						);
 						lastGitHubPollMs = now; // Avoid tight retry loop on persistent errors.
 					}
+				}
+			}
+
+			// Comment poll cycle: check tracked PRs for new review comments.
+			if (config.github?.token) {
+				try {
+					const commentPoll = await pollPRComments(
+						config.paths.stateDir,
+						config.github.token,
+						config.github.botUsername,
+						logger ? toLogCallback(logger) : undefined,
+					);
+					for (const actionable of commentPoll.actionable) {
+						try {
+							await addressComments({
+								config,
+								pollResult: actionable,
+								jobRunner: jobRunner,
+								logger: logger ? toLogCallback(logger) : undefined,
+							});
+						} catch (addrError) {
+							const msg = addrError instanceof Error ? addrError.message : String(addrError);
+							logger?.error(`comment-addresser error: ${msg}`);
+						}
+					}
+				} catch (commentError) {
+					const msg = commentError instanceof Error ? commentError.message : String(commentError);
+					logger?.error(`comment-poll error: ${msg}`);
 				}
 			}
 

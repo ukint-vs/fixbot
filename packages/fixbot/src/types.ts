@@ -245,6 +245,8 @@ export interface DaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** GPG key ID (fingerprint or email) used for signing commits. When omitted, signing is attempted only if git's global user.signingKey is set. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. Used to filter out bot comments during comment polling. */
+	botUsername?: string;
 }
 
 export interface NormalizedDaemonGitHubRepoConfig {
@@ -261,6 +263,8 @@ export interface NormalizedDaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** Normalized from DaemonGitHubConfig.gpgKeyId. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. Used to filter out bot comments during comment polling. */
+	botUsername?: string;
 }
 
 export interface DaemonConfigV1 {
@@ -392,4 +396,29 @@ export interface DaemonStatusSnapshotV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+}
+
+// ---------------------------------------------------------------------------
+// PR tracker types (comment polling)
+// ---------------------------------------------------------------------------
+
+export interface PRTrackerEntry {
+	owner: string;
+	repo: string;
+	prNumber: number;
+	headBranch: string;
+	baseBranch: string;
+	repoUrl: string;
+	jobId: string;
+	createdAt: string;
+	lastCheckedAt: string;
+	lastProcessedCommentId: number;
+	cycleCount: number;
+	blockedAt?: string;
+	blockedReason?: string;
+}
+
+export interface PRTrackerState {
+	version: string;
+	entries: PRTrackerEntry[];
 }
