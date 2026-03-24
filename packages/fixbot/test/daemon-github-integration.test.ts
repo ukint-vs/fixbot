@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { normalizeJobSpec } from "../src/contracts";
 import { enqueueDaemonJob } from "../src/daemon/job-store";
@@ -84,7 +84,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -113,7 +113,7 @@ async function startForegroundDaemonWithGitHub(
 
 	const readyStatus = await waitFor(
 		() => readDaemonStatusFile(config),
-		(status) => status?.state === "idle" && status.pid === process.pid,
+		status => status?.state === "idle" && status.pid === process.pid,
 		5_000,
 	);
 	expect(readyStatus?.state).toBe("idle");
@@ -135,7 +135,7 @@ describe("daemon GitHub poller integration", () => {
 		let pollCount = 0;
 
 		// Poller that enqueues one job on first call, then returns empty on subsequent calls.
-		const githubPoller: GitHubPollerFn = async (cfg) => {
+		const githubPoller: GitHubPollerFn = async cfg => {
 			pollCount++;
 			if (pollCount === 1) {
 				const jobSpec = normalizeJobSpec(
@@ -214,7 +214,7 @@ describe("daemon GitHub poller integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -253,7 +253,7 @@ describe("daemon GitHub poller integration", () => {
 		// Wait for a few poll cycles so the error is recorded.
 		const statusWithError = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.lastError?.code === "GITHUB_POLL_ERROR" && pollCount >= 2,
+			status => status?.lastError?.code === "GITHUB_POLL_ERROR" && pollCount >= 2,
 			10_000,
 		);
 
@@ -276,7 +276,7 @@ describe("daemon GitHub poller integration", () => {
 		const jobId = "gh-lint-integration-001";
 		let pollCount = 0;
 
-		const githubPoller: GitHubPollerFn = async (cfg) => {
+		const githubPoller: GitHubPollerFn = async cfg => {
 			pollCount++;
 			if (pollCount === 1) {
 				const jobSpec = normalizeJobSpec(
@@ -352,7 +352,7 @@ describe("daemon GitHub poller integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -378,7 +378,7 @@ describe("daemon GitHub poller integration", () => {
 		const jobId = "gh-solve-integration-001";
 		let pollCount = 0;
 
-		const githubPoller: GitHubPollerFn = async (cfg) => {
+		const githubPoller: GitHubPollerFn = async cfg => {
 			pollCount++;
 			if (pollCount === 1) {
 				const jobSpec = normalizeJobSpec(
@@ -455,7 +455,7 @@ describe("daemon GitHub poller integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -479,7 +479,7 @@ describe("daemon GitHub poller integration", () => {
 		const jobId = "gh-cve-integration-001";
 		let pollCount = 0;
 
-		const githubPoller: GitHubPollerFn = async (cfg) => {
+		const githubPoller: GitHubPollerFn = async cfg => {
 			pollCount++;
 			if (pollCount === 1) {
 				const jobSpec = normalizeJobSpec(
@@ -556,7 +556,7 @@ describe("daemon GitHub poller integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -582,7 +582,7 @@ describe("daemon GitHub poller integration", () => {
 		let pollCount = 0;
 		let reporterReceivedToken: string | undefined;
 
-		const githubPoller: GitHubPollerFn = async (cfg) => {
+		const githubPoller: GitHubPollerFn = async cfg => {
 			pollCount++;
 			if (pollCount === 1) {
 				const jobSpec = normalizeJobSpec(
@@ -668,7 +668,7 @@ describe("daemon GitHub poller integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 

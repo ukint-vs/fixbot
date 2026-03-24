@@ -49,12 +49,12 @@ export class DuplicateDaemonJobError extends Error {
 	constructor(jobId: string, collisions: DuplicateDaemonJobCollision[]) {
 		super(
 			`Cannot enqueue duplicate daemon job "${jobId}" because it already exists in ${collisions
-				.map((collision) => `${collision.kind}:${collision.path}`)
+				.map(collision => `${collision.kind}:${collision.path}`)
 				.join(", ")}`,
 		);
 		this.name = "DuplicateDaemonJobError";
 		this.jobId = jobId;
-		this.collisions = collisions.map((collision) => ({ ...collision }));
+		this.collisions = collisions.map(collision => ({ ...collision }));
 	}
 }
 
@@ -64,7 +64,7 @@ function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionS
 	const submission = assertObject(value, label);
 	const kind = submission.kind as string;
 	if (!VALID_SUBMISSION_KINDS.has(kind as DaemonSubmissionKind)) {
-		throw new Error(`${label}.kind must be one of ${[...VALID_SUBMISSION_KINDS].map((k) => `"${k}"`).join(", ")}`);
+		throw new Error(`${label}.kind must be one of ${[...VALID_SUBMISSION_KINDS].map(k => `"${k}"`).join(", ")}`);
 	}
 	const filePath = submission.filePath;
 	const result: DaemonSubmissionSourceV1 = {
@@ -187,7 +187,7 @@ function readJsonFile(filePath: string): unknown {
 function listJsonFiles(directoryPath: string): string[] {
 	try {
 		return readdirSync(directoryPath)
-			.filter((entry) => entry.endsWith(".json"))
+			.filter(entry => entry.endsWith(".json"))
 			.sort((left, right) => left.localeCompare(right));
 	} catch (error) {
 		if (isFileMissingError(error)) {
@@ -242,14 +242,14 @@ export function ensureDaemonJobStoreDirectories(config: Pick<NormalizedDaemonCon
 export function listQueuedDaemonJobs(config: Pick<NormalizedDaemonConfigV1, "paths">): QueuedDaemonJobRecord[] {
 	const paths = ensureDaemonJobStoreDirectories(config);
 	return listJsonFiles(paths.queueDir)
-		.map((fileName) => readQueuedRecord(join(paths.queueDir, fileName)))
+		.map(fileName => readQueuedRecord(join(paths.queueDir, fileName)))
 		.sort(compareQueuedRecords);
 }
 
 export function listActiveDaemonJobs(config: Pick<NormalizedDaemonConfigV1, "paths">): ActiveDaemonJobRecord[] {
 	const paths = ensureDaemonJobStoreDirectories(config);
 	return listJsonFiles(paths.activeDir)
-		.map((fileName) => readActiveRecord(join(paths.activeDir, fileName)))
+		.map(fileName => readActiveRecord(join(paths.activeDir, fileName)))
 		.sort((left, right) => left.fileName.localeCompare(right.fileName));
 }
 
@@ -410,7 +410,7 @@ export function buildQueueStatusFromSpool(
 ): import("../types").DaemonQueueStatusV1 {
 	const queued = listQueuedDaemonJobs(config);
 	const depth = queued.length;
-	const preview = queued.slice(0, previewLimit).map((record) => ({
+	const preview = queued.slice(0, previewLimit).map(record => ({
 		jobId: record.envelope.jobId,
 		enqueuedAt: record.envelope.enqueuedAt,
 		submission: { ...record.envelope.submission },
@@ -431,5 +431,5 @@ export function listOrphanedActiveDaemonJobs(
 	config: Pick<NormalizedDaemonConfigV1, "paths">,
 	knownActiveJobId: string | undefined,
 ): ActiveDaemonJobRecord[] {
-	return listActiveDaemonJobs(config).filter((record) => record.envelope.jobId !== knownActiveJobId);
+	return listActiveDaemonJobs(config).filter(record => record.envelope.jobId !== knownActiveJobId);
 }

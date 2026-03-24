@@ -83,7 +83,7 @@ export async function spawnCommand(
 			stderr += text;
 			options.onStderr?.(text);
 		});
-		child.on("error", (error) => {
+		child.on("error", error => {
 			if (settled) {
 				return;
 			}

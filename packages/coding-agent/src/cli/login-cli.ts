@@ -8,9 +8,9 @@ import * as readline from "node:readline";
 import { getOAuthProviders, type OAuthProviderId, type OAuthProviderInfo } from "@oh-my-pi/pi-ai";
 import { APP_NAME, getAgentDbPath } from "@oh-my-pi/pi-utils";
 import chalk from "chalk";
+import { theme } from "../modes/theme/theme";
 import { discoverAuthStorage } from "../sdk";
 import { openPath } from "../utils/open";
-import { theme } from "../modes/theme/theme";
 
 // =============================================================================
 // Types
@@ -103,11 +103,13 @@ function resolveProvider(providerId: string): OAuthProviderInfo {
 // =============================================================================
 
 export async function runLoginCommand(args: LoginCommandArgs): Promise<void> {
-	let authStorage;
+	let authStorage: Awaited<ReturnType<typeof discoverAuthStorage>> | undefined;
 	try {
 		authStorage = await discoverAuthStorage();
 	} catch (error) {
-		console.error(chalk.red(`Failed to open credentials database: ${error instanceof Error ? error.message : String(error)}`));
+		console.error(
+			chalk.red(`Failed to open credentials database: ${error instanceof Error ? error.message : String(error)}`),
+		);
 		process.exit(1);
 	}
 
@@ -145,9 +147,7 @@ export async function runLoginCommand(args: LoginCommandArgs): Promise<void> {
 				openPath(info.url);
 			},
 			onPrompt: async (prompt: { message: string; placeholder?: string }) => {
-				const question = prompt.placeholder
-					? `${prompt.message} (${prompt.placeholder}): `
-					: `${prompt.message}: `;
+				const question = prompt.placeholder ? `${prompt.message} (${prompt.placeholder}): ` : `${prompt.message}: `;
 				return askQuestion(rl, question);
 			},
 			onProgress: (message: string) => {
@@ -183,11 +183,13 @@ export async function runLogoutCommand(args: LogoutCommandArgs): Promise<void> {
 		process.exit(1);
 	}
 
-	let authStorage;
+	let authStorage: Awaited<ReturnType<typeof discoverAuthStorage>> | undefined;
 	try {
 		authStorage = await discoverAuthStorage();
 	} catch (error) {
-		console.error(chalk.red(`Failed to open credentials database: ${error instanceof Error ? error.message : String(error)}`));
+		console.error(
+			chalk.red(`Failed to open credentials database: ${error instanceof Error ? error.message : String(error)}`),
+		);
 		process.exit(1);
 	}
 

@@ -24,13 +24,13 @@ import { assertDockerImageReady } from "./image";
 import { createStderrLogger, type Logger } from "./logger";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
 import {
+	type DaemonModelConfig,
 	EXECUTION_PLAN_VERSION_V1,
 	type ExecutionOutputV1,
 	type ExecutionPlanV1,
 	JOB_RESULT_VERSION_V1,
 	type JobResultV1,
 	type ModelSelection,
-	type DaemonModelConfig,
 	type NormalizedJobSpecV1,
 } from "./types";
 

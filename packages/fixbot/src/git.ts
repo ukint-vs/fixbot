@@ -94,8 +94,8 @@ export function countChangedFilesFromStatus(statusText: string): number {
 	// Count uncommitted working-tree changes from `git status --short`
 	return statusText
 		.split(/\r?\n/)
-		.map((line) => line.trim())
-		.filter((line) => line !== "" && !line.startsWith("##")).length;
+		.map(line => line.trim())
+		.filter(line => line !== "" && !line.startsWith("##")).length;
 }
 
 /**
@@ -104,12 +104,10 @@ export function countChangedFilesFromStatus(statusText: string): number {
  */
 export async function countCommittedChangedFiles(workspaceDir: string, baseCommit: string): Promise<number> {
 	try {
-		const result = await spawnCommandOrThrow(
-			"git",
-			["diff", "--name-only", baseCommit, "HEAD"],
-			{ cwd: workspaceDir },
-		);
-		return result.stdout.split(/\r?\n/).filter((line) => line.trim() !== "").length;
+		const result = await spawnCommandOrThrow("git", ["diff", "--name-only", baseCommit, "HEAD"], {
+			cwd: workspaceDir,
+		});
+		return result.stdout.split(/\r?\n/).filter(line => line.trim() !== "").length;
 	} catch {
 		return 0;
 	}

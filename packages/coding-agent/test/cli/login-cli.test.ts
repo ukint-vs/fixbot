@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi, mock } from "bun:test";
+import { afterEach, beforeEach, describe, expect, it, mock, vi } from "bun:test";
 import { runLoginCommand, runLogoutCommand } from "../../src/cli/login-cli";
 
 // Mock discoverAuthStorage
@@ -33,12 +33,12 @@ mock.module("../../src/modes/theme/theme", () => ({
 
 let logSpy: ReturnType<typeof vi.spyOn>;
 let errorSpy: ReturnType<typeof vi.spyOn>;
-let exitSpy: ReturnType<typeof vi.spyOn>;
+let _exitSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
 	logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 	errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-	exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
+	_exitSpy = vi.spyOn(process, "exit").mockImplementation(() => {
 		throw new Error("process.exit called");
 	});
 	mockHas.mockReset();
@@ -62,7 +62,7 @@ describe("login --status", () => {
 
 		await runLoginCommand({ flags: { status: true } });
 
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("Provider authentication status");
 		// Should list at least anthropic
 		expect(output).toContain("Anthropic");
@@ -79,7 +79,7 @@ describe("login --status", () => {
 
 		await runLoginCommand({ flags: { status: true } });
 
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		// Anthropic should show success marker
 		expect(output).toContain("Anthropic");
 		// Should show expiry
@@ -97,7 +97,7 @@ describe("login --status", () => {
 
 		await runLoginCommand({ flags: { status: true } });
 
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("expired");
 	});
 });
@@ -128,7 +128,7 @@ describe("login with provider", () => {
 
 		await runLoginCommand({ provider: "anthropic", flags: {} });
 
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("Successfully logged in");
 		expect(output).toContain("Credentials saved");
 	});
@@ -139,18 +139,18 @@ describe("login with provider", () => {
 
 		await runLoginCommand({ provider: "anthropic", flags: {} });
 
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("Already logged in");
 		expect(output).toContain("Re-authenticating");
 		expect(mockLogin).toHaveBeenCalledTimes(1);
 	});
 
 	it("exits with error for unknown provider", async () => {
-		await expect(
-			runLoginCommand({ provider: "nonexistent-provider-xyz", flags: {} }),
-		).rejects.toThrow("process.exit called");
+		await expect(runLoginCommand({ provider: "nonexistent-provider-xyz", flags: {} })).rejects.toThrow(
+			"process.exit called",
+		);
 
-		const errOutput = errorSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const errOutput = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(errOutput).toContain("Unknown provider");
 	});
 
@@ -158,11 +158,9 @@ describe("login with provider", () => {
 		mockHas.mockReturnValue(false);
 		mockLogin.mockRejectedValue(new Error("Token exchange failed"));
 
-		await expect(
-			runLoginCommand({ provider: "anthropic", flags: {} }),
-		).rejects.toThrow("process.exit called");
+		await expect(runLoginCommand({ provider: "anthropic", flags: {} })).rejects.toThrow("process.exit called");
 
-		const errOutput = errorSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const errOutput = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(errOutput).toContain("Login failed");
 		expect(errOutput).toContain("Token exchange failed");
 	});
@@ -180,7 +178,7 @@ describe("logout", () => {
 		await runLogoutCommand({ provider: "anthropic" });
 
 		expect(mockLogout).toHaveBeenCalledWith("anthropic");
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("Successfully logged out");
 	});
 
@@ -190,25 +188,21 @@ describe("logout", () => {
 		await runLogoutCommand({ provider: "anthropic" });
 
 		expect(mockLogout).not.toHaveBeenCalled();
-		const output = logSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const output = logSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(output).toContain("Not logged in");
 	});
 
 	it("exits with error for unknown provider", async () => {
-		await expect(
-			runLogoutCommand({ provider: "nonexistent-provider-xyz" }),
-		).rejects.toThrow("process.exit called");
+		await expect(runLogoutCommand({ provider: "nonexistent-provider-xyz" })).rejects.toThrow("process.exit called");
 
-		const errOutput = errorSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const errOutput = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(errOutput).toContain("Unknown provider");
 	});
 
 	it("exits with error when no provider specified", async () => {
-		await expect(
-			runLogoutCommand({}),
-		).rejects.toThrow("process.exit called");
+		await expect(runLogoutCommand({})).rejects.toThrow("process.exit called");
 
-		const errOutput = errorSpy.mock.calls.map(c => String(c[0])).join("\n");
+		const errOutput = errorSpy.mock.calls.map((c: unknown[]) => String(c[0])).join("\n");
 		expect(errOutput).toContain("Usage:");
 	});
 });

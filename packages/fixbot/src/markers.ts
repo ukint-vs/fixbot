@@ -23,9 +23,9 @@ export function parseResultMarkers(text: string): ParsedResultMarkers {
 function firstUsefulLine(text: string): string | undefined {
 	return text
 		.split(/\r?\n/)
-		.map((line) => line.trim())
+		.map(line => line.trim())
 		.find(
-			(line) =>
+			line =>
 				line !== "" &&
 				!line.startsWith("GITFIX_RESULT:") &&
 				!line.startsWith("GITFIX_SUMMARY:") &&

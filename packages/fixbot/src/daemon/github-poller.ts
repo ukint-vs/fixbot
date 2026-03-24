@@ -70,7 +70,7 @@ export async function fetchLabeledIssues(
 		logger?.(`[fixbot] github-poll warn: fetchLabeledIssues ${owner}/${repo} malformed JSON: ${msg}`);
 		return [];
 	}
-	return data.map((issue) => ({ number: issue.number, title: issue.title, body: issue.body ?? null }));
+	return data.map(issue => ({ number: issue.number, title: issue.title, body: issue.body ?? null }));
 }
 
 export async function fetchLatestFailedRun(
@@ -122,9 +122,7 @@ export async function postAckComment(
 		response = await githubApiFetch(path, token, "POST", body);
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		logger?.(
-			`[fixbot] github-poll warn: postAckComment network error for ${owner}/${repo}#${issueNumber}: ${msg}`,
-		);
+		logger?.(`[fixbot] github-poll warn: postAckComment network error for ${owner}/${repo}#${issueNumber}: ${msg}`);
 		return false;
 	}
 	return response.status === 201;
@@ -143,15 +141,11 @@ export async function hasAckComment(
 		response = await githubApiFetch(path, token);
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		logger?.(
-			`[fixbot] github-poll warn: hasAckComment network error for ${owner}/${repo}#${issueNumber}: ${msg}`,
-		);
+		logger?.(`[fixbot] github-poll warn: hasAckComment network error for ${owner}/${repo}#${issueNumber}: ${msg}`);
 		return false;
 	}
 	if (response.status !== 200) {
-		logger?.(
-			`[fixbot] github-poll warn: hasAckComment ${owner}/${repo}#${issueNumber} returned ${response.status}`,
-		);
+		logger?.(`[fixbot] github-poll warn: hasAckComment ${owner}/${repo}#${issueNumber} returned ${response.status}`);
 		return false;
 	}
 	let comments: Array<{ body?: string }>;
@@ -159,12 +153,10 @@ export async function hasAckComment(
 		comments = (await response.json()) as Array<{ body?: string }>;
 	} catch (error) {
 		const msg = error instanceof Error ? error.message : String(error);
-		logger?.(
-			`[fixbot] github-poll warn: hasAckComment ${owner}/${repo}#${issueNumber} malformed JSON: ${msg}`,
-		);
+		logger?.(`[fixbot] github-poll warn: hasAckComment ${owner}/${repo}#${issueNumber} malformed JSON: ${msg}`);
 		return false;
 	}
-	return comments.some((comment) => comment.body?.includes("<!-- fixbot-ack -->"));
+	return comments.some(comment => comment.body?.includes("<!-- fixbot-ack -->"));
 }
 
 // ---------------------------------------------------------------------------
@@ -315,9 +307,7 @@ export async function pollGitHubRepos(
 						continue;
 					}
 					const msg = error instanceof Error ? error.message : String(error);
-					logger?.(
-						`[fixbot] github-poll error: enqueue failed for ${owner}/${repo}#${issue.number}: ${msg}`,
-					);
+					logger?.(`[fixbot] github-poll error: enqueue failed for ${owner}/${repo}#${issue.number}: ${msg}`);
 					errors++;
 					continue;
 				}

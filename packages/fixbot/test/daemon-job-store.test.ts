@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import {
 	claimNextQueuedDaemonJob,
@@ -120,7 +120,7 @@ describe("daemon job store", () => {
 		enqueueDaemonJob(config, createEnvelope(config, "job-middle", "2026-03-16T08:00:01.500Z"));
 
 		const queued = listQueuedDaemonJobs(config);
-		expect(queued.map((entry) => entry.envelope.jobId)).toEqual(["job-early", "job-middle", "job-late"]);
+		expect(queued.map(entry => entry.envelope.jobId)).toEqual(["job-early", "job-middle", "job-late"]);
 	});
 
 	it("claims the next queued job into active storage and removes it on terminal cleanup", () => {
@@ -133,8 +133,8 @@ describe("daemon job store", () => {
 		expect(claimed?.envelope.jobId).toBe("job-a");
 		expect(existsSync(claimed?.queueFilePath ?? "")).toBe(false);
 		expect(existsSync(claimed?.filePath ?? "")).toBe(true);
-		expect(listQueuedDaemonJobs(config).map((entry) => entry.envelope.jobId)).toEqual(["job-b"]);
-		expect(listActiveDaemonJobs(config).map((entry) => entry.envelope.jobId)).toEqual(["job-a"]);
+		expect(listQueuedDaemonJobs(config).map(entry => entry.envelope.jobId)).toEqual(["job-b"]);
+		expect(listActiveDaemonJobs(config).map(entry => entry.envelope.jobId)).toEqual(["job-a"]);
 		expect(removeActiveDaemonJob(config, "job-a")).toBe(true);
 		expect(removeActiveDaemonJob(config, "job-a")).toBe(false);
 		expect(listActiveDaemonJobs(config)).toEqual([]);
@@ -149,7 +149,7 @@ describe("daemon job store", () => {
 		const queuedError = expectDuplicateError(() =>
 			enqueueDaemonJob(queuedConfig, createEnvelope(queuedConfig, "duplicate-job", "2026-03-16T08:00:05.000Z")),
 		);
-		expect(queuedError.collisions.map((collision) => collision.kind)).toContain("queue");
+		expect(queuedError.collisions.map(collision => collision.kind)).toContain("queue");
 
 		const activeConfig = createTempConfig();
 		enqueueDaemonJob(activeConfig, createEnvelope(activeConfig, "duplicate-job", "2026-03-16T08:00:00.000Z"));
@@ -157,9 +157,9 @@ describe("daemon job store", () => {
 		const activeError = expectDuplicateError(() =>
 			enqueueDaemonJob(activeConfig, createEnvelope(activeConfig, "duplicate-job", "2026-03-16T08:00:05.000Z")),
 		);
-		expect(activeError.collisions.map((collision) => collision.kind)).toContain("active");
+		expect(activeError.collisions.map(collision => collision.kind)).toContain("active");
 		expect(
-			findDuplicateDaemonJobCollisions(activeConfig, "duplicate-job").map((collision) => collision.kind),
+			findDuplicateDaemonJobCollisions(activeConfig, "duplicate-job").map(collision => collision.kind),
 		).toContain("active");
 
 		const artifactConfig = createTempConfig();
@@ -169,7 +169,7 @@ describe("daemon job store", () => {
 		const artifactError = expectDuplicateError(() =>
 			enqueueDaemonJob(artifactConfig, createEnvelope(artifactConfig, "duplicate-job", "2026-03-16T08:00:05.000Z")),
 		);
-		expect(artifactError.collisions.map((collision) => collision.kind)).toEqual(["result-file", "artifact-dir"]);
+		expect(artifactError.collisions.map(collision => collision.kind)).toEqual(["result-file", "artifact-dir"]);
 	});
 
 	it("re-queues an orphaned active job back to the queue with original timestamp", () => {

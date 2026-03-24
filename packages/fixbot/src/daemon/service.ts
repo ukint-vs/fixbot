@@ -1,5 +1,5 @@
 import { type ChildProcess, spawn } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { createDaemonStatus, loadDaemonConfig } from "../config";
 import { type Logger, toLogCallback } from "../logger";
@@ -249,7 +249,10 @@ async function waitForDaemonReady(config: NormalizedDaemonConfigV1, timeoutMs: n
 	while (Date.now() < deadline) {
 		const inspection = inspectDaemon(config);
 		latestStatus = inspection.status;
-		if (inspection.processRunning && (latestStatus.state === "idle" || latestStatus.state === "running" || latestStatus.state === "degraded")) {
+		if (
+			inspection.processRunning &&
+			(latestStatus.state === "idle" || latestStatus.state === "running" || latestStatus.state === "degraded")
+		) {
 			return latestStatus;
 		}
 		if (latestStatus.state === "error") {
@@ -517,14 +520,14 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 
 	// Build the GitHub poller: use injected poller if provided, otherwise create default when config.github exists.
 	const defaultGitHubPoller: GitHubPollerFn | undefined = config.github
-		? async (cfg) => {
+		? async cfg => {
 				if (!cfg.github) {
 					return { enqueued: [], skipped: 0, errors: 0 };
 				}
 				return pollGitHubRepos(
 					cfg.github,
 					cfg.paths.resultsDir,
-					(envelope) => enqueueDaemonJob(cfg, envelope),
+					envelope => enqueueDaemonJob(cfg, envelope),
 					logger ? toLogCallback(logger) : undefined,
 				);
 			}
@@ -663,7 +666,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 			if (queuedDepth !== currentStatus.queue.depth) {
 				const spoolQueue = buildQueueStatusFromSpool(config);
 				const orphans = listOrphanedActiveDaemonJobs(config, currentStatus.activeJob?.jobId).map(
-					(r) => r.envelope.jobId,
+					r => r.envelope.jobId,
 				);
 				currentStatus =
 					orphans.length > 0
@@ -681,9 +684,9 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 							await resolveToken();
 							renderLog(logger, "app-auth: refreshed installation token");
 						} catch (refreshError) {
-						logger?.error(
-							`app-auth: token refresh failed: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
-						);
+							logger?.error(
+								`app-auth: token refresh failed: ${refreshError instanceof Error ? refreshError.message : String(refreshError)}`,
+							);
 						}
 					}
 					try {
@@ -695,7 +698,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 						lastGitHubPollMs = now;
 					} catch (error) {
 						const message = error instanceof Error ? error.message : String(error);
-					logger?.error(`github-poll error: ${message}`);
+						logger?.error(`github-poll error: ${message}`);
 						currentStatus = transitionStatus(
 							config,
 							currentStatus,
