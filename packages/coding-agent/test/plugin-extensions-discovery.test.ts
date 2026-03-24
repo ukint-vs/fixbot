@@ -38,7 +38,7 @@ describe("plugin extension discovery", () => {
 			JSON.stringify({
 				name: "@demo/plugin",
 				version: "1.0.0",
-				fixbot: {
+				omp: {
 					extensions: ["./dist/extension.ts"],
 				},
 			}),
