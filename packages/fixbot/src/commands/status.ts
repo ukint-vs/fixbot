@@ -29,8 +29,8 @@ export default class Status extends Command {
 			issues = result.issues;
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			process.stdout.write(`fixbot daemon is not running (${message})\n`);
-			process.exitCode = 2;
+			process.stderr.write(`error: fixbot daemon is not running — ${message}\n`);
+			process.exitCode = 1;
 			return;
 		}
 

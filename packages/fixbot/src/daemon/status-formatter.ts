@@ -244,9 +244,11 @@ export function formatStatusDashboard(
 	const repoStats = computeRepoStats(status.recentResults, DEFAULT_WINDOW_MS, now);
 	if (repoStats.length > 0) {
 		lines.push(section("Per-Repo Stats (last 7 days)"));
+		const maxRepoLen = Math.max(...repoStats.map((s) => s.repo.length));
 		for (const s of repoStats) {
+			const paddedRepo = s.repo.padEnd(maxRepoLen);
 			lines.push(
-				`  ${s.repo}  ${s.total} jobs  ${chalk.green(`${s.success} ok`)}  ${chalk.red(`${s.failed} fail`)}  ${s.successRate}`,
+				`  ${paddedRepo}  ${String(s.total).padStart(3)} jobs  ${chalk.green(`${s.success} ok`)}  ${chalk.red(`${s.failed} fail`)}  ${s.successRate}`,
 			);
 		}
 	}
