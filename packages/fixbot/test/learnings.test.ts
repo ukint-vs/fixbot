@@ -386,12 +386,14 @@ describe("recordLearning", () => {
 		expect(entries[0].jobId).toBe("job-1");
 	});
 
-	it("does not throw on error, logs warning", () => {
+	it("does not throw when recording succeeds with a logger attached", () => {
 		const warnings: string[] = [];
 		const logger = { warn: (msg: string) => warnings.push(msg) };
 
 		const result = makeResult({ repo: { url: testRepoUrl, baseBranch: "main" } });
 		// Should not throw
 		expect(() => recordLearning(result, logger)).not.toThrow();
+		// No warnings expected on success
+		expect(warnings).toHaveLength(0);
 	});
 });

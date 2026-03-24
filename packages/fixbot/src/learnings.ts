@@ -72,7 +72,7 @@ export function classifyError(result: JobResultV1): ErrorCategory | null {
 	if (text.includes("rate limit") || text.includes("rate_limit") || text.includes("429") || text.includes("too many requests")) {
 		return "rate_limit";
 	}
-	if (text.includes("refus") || text.includes("content policy") || text.includes("safety")) {
+	if (text.includes("refused") || text.includes("refusal") || text.includes("content policy") || text.includes("safety")) {
 		return "model_refusal";
 	}
 	if (text.includes("no changes") || text.includes("no fix") || text.includes("nothing to commit")) {
