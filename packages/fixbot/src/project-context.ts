@@ -29,7 +29,7 @@ export function truncateWithNote(content: string, budget: number): string {
 
 export function parseCacheMetadata(
 	content: string,
-): { timestamp: string; commitHash: string } | undefined {
+): { timestamp: string; commitHash: string | undefined } | undefined {
 	if (!content.startsWith(GENERATED_HEADER)) {
 		return undefined;
 	}
@@ -40,7 +40,7 @@ export function parseCacheMetadata(
 	}
 	return {
 		timestamp: timestampMatch[1],
-		commitHash: commitMatch ? commitMatch[1] : undefined as unknown as string,
+		commitHash: commitMatch ? commitMatch[1] : undefined,
 	};
 }
 
@@ -88,11 +88,11 @@ export function discoverExistingDocs(workspaceDir: string): {
 	if (existsSync(rootClaudeMd)) {
 		try {
 			result.claudeMd = readFileSync(rootClaudeMd, "utf-8");
-		} catch {}
+		} catch { /* permission or I/O error — skip gracefully */ }
 	} else if (existsSync(nestedClaudeMd)) {
 		try {
 			result.claudeMd = readFileSync(nestedClaudeMd, "utf-8");
-		} catch {}
+		} catch { /* permission or I/O error — skip gracefully */ }
 	}
 
 	// AGENTS.md
@@ -100,7 +100,7 @@ export function discoverExistingDocs(workspaceDir: string): {
 	if (existsSync(agentsMd)) {
 		try {
 			result.agentsMd = readFileSync(agentsMd, "utf-8");
-		} catch {}
+		} catch { /* permission or I/O error — skip gracefully */ }
 	}
 
 	return result;
@@ -208,10 +208,10 @@ export function detectLanguage(
 	if (existsSync(join(workspaceDir, "package.json"))) {
 		try {
 			const pkg = JSON.parse(readFileSync(join(workspaceDir, "package.json"), "utf-8"));
-			const allDeps = { ...pkg.dependencies, ...pkg.devDependencies };
+			const allDeps = { ...(pkg.dependencies || {}), ...(pkg.devDependencies || {}) };
 			if ("typescript" in allDeps) return "TypeScript";
 			return "JavaScript";
-		} catch {}
+		} catch { /* malformed package.json — fall through to Unknown */ }
 	}
 
 	return "Unknown";
@@ -228,17 +228,14 @@ export function generateReadmeSection(workspaceDir: string): string | undefined 
 	}
 	try {
 		const content = readFileSync(readmePath, "utf-8");
-		// Extract everything up to the second heading (##)
+		// Extract the title heading and text up to the first ## section heading
 		const lines = content.split("\n");
 		const sectionLines: string[] = [];
-		let foundFirstHeading = false;
+		let foundHeading = false;
 		for (const line of lines) {
-			if (line.startsWith("## ")) {
-				if (foundFirstHeading) break;
-				// This shouldn't happen as first heading is typically #
-			}
-			if (line.startsWith("# ")) {
-				foundFirstHeading = true;
+			if (line.startsWith("# ") || line.startsWith("## ")) {
+				if (foundHeading) break;
+				foundHeading = true;
 			}
 			sectionLines.push(line);
 		}
@@ -333,7 +330,7 @@ export function generateProjectContext(workspaceDir: string): string {
 	if (existsSync(pkgPath)) {
 		try {
 			packageJson = JSON.parse(readFileSync(pkgPath, "utf-8"));
-		} catch {}
+		} catch { /* malformed package.json — continue without it */ }
 	}
 
 	const name = (packageJson && typeof packageJson.name === "string" ? packageJson.name : projectName) || projectName;
@@ -411,20 +408,20 @@ export function getProjectContext(
 				const metadata = parseCacheMetadata(content);
 				if (!metadata) {
 					// User-provided (not auto-generated)
-					log?.debug?.("using user-provided project context");
+					log?.info("using user-provided project context");
 					return { content, source: "user-provided" };
 				}
 
 				// Check cache validity
 				const currentCommit = tryGetHeadCommitSync(workspaceDir);
 				if (isCacheValid(metadata, currentCommit ?? undefined)) {
-					log?.debug?.("using cached generated project context");
+					log?.info("using cached generated project context");
 					// Strip the generated header and metadata for the returned content
 					const bodyStart = content.indexOf("\n\n");
 					const body = bodyStart >= 0 ? content.slice(bodyStart + 2) : content;
 					return { content: body, source: metadata.commitHash ? "generated" : "generated" };
 				}
-				log?.debug?.("cached project context is stale, regenerating");
+				log?.info("cached project context is stale, regenerating");
 			} catch {
 				// Fall through to discovery
 			}
@@ -434,7 +431,7 @@ export function getProjectContext(
 		const docs = discoverExistingDocs(workspaceDir);
 		const merged = mergeExistingDocs(docs.claudeMd, docs.agentsMd);
 		if (merged) {
-			log?.debug?.(`using ${merged.source} as project context`);
+			log?.info(`using ${merged.source} as project context`);
 			const content = truncateWithNote(merged.content, CONTEXT_BUDGET_CHARS);
 			// Cache result
 			writeCache(workspaceDir, content, log);

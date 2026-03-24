@@ -13,6 +13,7 @@ import {
 	Settings,
 } from "@oh-my-pi/pi-coding-agent";
 import { createGhReadOnlyEnvironment } from "./gh-read-only";
+import { createStderrLogger } from "./logger";
 import { resolveHostAgentConfig } from "./host-agent";
 import { parseResultMarkers } from "./markers";
 import { getProjectContext } from "./project-context";
@@ -393,7 +394,7 @@ export class CodingAgentSessionDriver implements SessionDriver {
 		];
 
 		// Inject project knowledge context (three-tier: user-provided > CLAUDE.md/AGENTS.md > generated)
-		const projectCtx = getProjectContext(input.workspaceDir);
+		const projectCtx = getProjectContext(input.workspaceDir, createStderrLogger("project-context"));
 		if (projectCtx.content) {
 			contextFiles.push({
 				path: join(input.workspaceDir, ".fixbot", "project-context.md"),
