@@ -1,14 +1,13 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModels } from "@oh-my-pi/pi-ai";
+import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
-import { afterEach, describe, expect, it } from "bun:test";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
 import {
 	buildGitFixPrompt,
 	buildInjectedContext,
-	getConfiguredAuthFilePath,
 	resolveSkillPath,
 	runInternalExecutionFromPlan,
 	type SessionDriver,
@@ -17,178 +16,127 @@ import type { ExecutionPlanV1, NormalizedJobSpecV1 } from "../src/types";
 
 describe("internal runner", () => {
 	it("resolves an explicit model override when provider auth is available", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
+
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-model",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
+						model: { provider: "anthropic", modelId: DEFAULT_MODEL_PER_PROVIDER.anthropic },
+					},
+				},
+				{ modelRegistry },
+			);
+
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
 		}
-
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-model",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
-					},
-					model: {
-						provider: "anthropic",
-						modelId: knownAnthropicModel.id,
-					},
-				},
-			},
-			{ modelRegistry },
-		);
-
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(knownAnthropicModel.id);
 	});
 
-	it("uses the host default provider/model when no job override is provided", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+	it("uses the provider default model when no job override is provided", async () => {
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-host-default",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-host-default",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
 					},
 				},
-			},
-			{
-				hostConfig: {
-					hostAgentDir: "/tmp/host-agent",
-					hostAgentDirExists: true,
-					authFilePath: "/tmp/host-agent/auth.json",
-					authFileExists: true,
-					settingsFilePath: "/tmp/host-agent/settings.json",
-					settingsFileExists: true,
-					modelsFilePath: "/tmp/host-agent/models.json",
-					modelsFileExists: false,
-					defaultProvider: "anthropic",
-					defaultModel: knownAnthropicModel.id,
-				},
-				authStorage,
-				modelRegistry,
-			},
-		);
+				{ authStorage, modelRegistry },
+			);
 
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(knownAnthropicModel.id);
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
+		}
 	});
 
-	it("falls back when the host default model is unavailable", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const fallbackModel = getModels("anthropic")[0];
-		if (!fallbackModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+	it("falls back to provider default when no job model override", async () => {
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-bad-host-default",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-bad-host-default",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
 					},
 				},
-			},
-			{
-				hostConfig: {
-					hostAgentDir: "/tmp/host-agent",
-					hostAgentDirExists: true,
-					authFilePath: "/tmp/host-agent/auth.json",
-					authFileExists: true,
-					settingsFilePath: "/tmp/host-agent/settings.json",
-					settingsFileExists: true,
-					modelsFilePath: "/tmp/host-agent/models.json",
-					modelsFileExists: false,
-					defaultProvider: "anthropic",
-					defaultModel: "does-not-exist",
-				},
-				authStorage,
-				modelRegistry,
-			},
-		);
+				{ authStorage, modelRegistry },
+			);
 
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(fallbackModel.id);
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
+		}
 	});
 
 	it("fails fast when no authenticated models are available", async () => {
-		// Clear all env vars that getEnvApiKey() would pick up so the in-memory
-		// auth storage actually has no available models regardless of the host env.
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
 		const envKeys = [
-			"GITHUB_TOKEN", "GH_TOKEN", "COPILOT_GITHUB_TOKEN",
-			"ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN",
-			"OPENAI_API_KEY", "GOOGLE_CLOUD_API_KEY",
+			"GITHUB_TOKEN",
+			"GH_TOKEN",
+			"COPILOT_GITHUB_TOKEN",
+			"ANTHROPIC_API_KEY",
+			"ANTHROPIC_OAUTH_TOKEN",
+			"OPENAI_API_KEY",
+			"GOOGLE_CLOUD_API_KEY",
 		] as const;
 		const savedEnv = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
 		for (const k of envKeys) process.env[k] = "";
 
 		try {
-			const authStorage = AuthStorage.inMemory();
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
 			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
 			await expect(
@@ -197,75 +145,59 @@ describe("internal runner", () => {
 						version: "fixbot.job/v1",
 						jobId: "internal-no-model",
 						taskClass: "fix_ci",
-						repo: {
-							url: "https://example.com/repo.git",
-							baseBranch: "main",
-						},
-						fixCi: {
-							githubActionsRunId: 12345,
-						},
+						repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+						fixCi: { githubActionsRunId: 12345 },
 						execution: {
 							mode: "process",
 							timeoutMs: 300000,
 							memoryLimitMb: 4096,
-							sandbox: {
-								mode: "workspace-write",
-								networkAccess: true,
-							},
+							sandbox: { mode: "workspace-write", networkAccess: true },
 						},
 					},
 					{ modelRegistry },
 				),
 			).rejects.toThrow("No authenticated models are available for this fixbot run.");
+			authStorage.close();
 		} finally {
 			for (const [k, v] of Object.entries(savedEnv)) {
 				if (v === undefined) delete process.env[k];
 				else process.env[k] = v;
 			}
+			rmSync(dbDir, { recursive: true, force: true });
 		}
 	});
 
-	it("resolves host auth paths with override precedence", () => {
+	it("resolves host agent dir from FIXBOT_AGENT_DIR env var", () => {
 		const hostDir = join(tmpdir(), `fixbot-agent-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		const authFile = join(tmpdir(), `fixbot-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 		mkdirSync(hostDir, { recursive: true });
-		writeFileSync(authFile, "{}", "utf-8");
-		writeFileSync(join(hostDir, "settings.json"), '{ "defaultProvider": "anthropic", "defaultModel": "x" }', "utf-8");
 
+		const original = process.env.FIXBOT_AGENT_DIR;
+		process.env.FIXBOT_AGENT_DIR = hostDir;
 		try {
-			const config = resolveHostAgentConfig({
-				...process.env,
-				FIXBOT_AGENT_DIR: hostDir,
-				FIXBOT_AUTH_FILE: authFile,
-			});
+			const config = resolveHostAgentConfig();
 			expect(config.hostAgentDir).toBe(hostDir);
-			expect(config.authFilePath).toBe(authFile);
-			expect(config.settingsFilePath).toBe(join(hostDir, "settings.json"));
+			expect(config.hostAgentDirExists).toBe(true);
 		} finally {
+			if (original === undefined) {
+				delete process.env.FIXBOT_AGENT_DIR;
+			} else {
+				process.env.FIXBOT_AGENT_DIR = original;
+			}
 			rmSync(hostDir, { recursive: true, force: true });
-			rmSync(authFile, { force: true });
 		}
 	});
 
-	it("accepts an external auth file path from FIXBOT_AUTH_FILE", () => {
-		const authFile = join(tmpdir(), `fixbot-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
-		const originalAuthFile = process.env.FIXBOT_AUTH_FILE;
-		writeFileSync(
-			authFile,
-			'{\n  "openai-codex": { "type": "oauth", "access": "x", "refresh": "y", "expires": 9999999999999, "accountId": "acct" }\n}\n',
-			"utf-8",
-		);
-		process.env.FIXBOT_AUTH_FILE = authFile;
-
+	it("throws when FIXBOT_AGENT_DIR points to non-existent directory", () => {
+		const original = process.env.FIXBOT_AGENT_DIR;
+		process.env.FIXBOT_AGENT_DIR = "/tmp/does-not-exist-fixbot-test";
 		try {
-			expect(getConfiguredAuthFilePath()).toBe(authFile);
+			expect(() => resolveHostAgentConfig()).toThrow("does not exist");
 		} finally {
-			if (originalAuthFile === undefined) {
-				delete process.env.FIXBOT_AUTH_FILE;
+			if (original === undefined) {
+				delete process.env.FIXBOT_AGENT_DIR;
 			} else {
-				process.env.FIXBOT_AUTH_FILE = originalAuthFile;
+				process.env.FIXBOT_AGENT_DIR = original;
 			}
-			rmSync(authFile, { force: true });
 		}
 	});
 

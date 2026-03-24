@@ -95,7 +95,7 @@ export function getDaemonHeartbeatAgeMs(
 function cloneDaemonQueueStatus(queue: DaemonStatusV1["queue"]): DaemonStatusSnapshotV1["queue"] {
 	return {
 		...queue,
-		preview: queue.preview.map((job) => ({
+		preview: queue.preview.map(job => ({
 			...job,
 			submission: job.submission ? { ...job.submission } : undefined,
 		})),
@@ -115,7 +115,7 @@ export function createDaemonStatusSnapshot(status: DaemonStatusV1, now: number =
 		lastError: status.lastError ? { ...status.lastError } : null,
 		queue: cloneDaemonQueueStatus(status.queue),
 		activeJob: status.activeJob ? { ...status.activeJob } : null,
-		recentResults: status.recentResults.map((result) => ({ ...result })),
+		recentResults: status.recentResults.map(result => ({ ...result })),
 	};
 }
 
@@ -291,9 +291,9 @@ function createObservedStatus(
 
 	const baseline = storedStatus ?? createDaemonStatus(config, { state: "degraded" });
 	const primaryCode =
-		issues.find((issue) => issue.includes("stale")) !== undefined
+		issues.find(issue => issue.includes("stale")) !== undefined
 			? "STALE_PID"
-			: issues.find((issue) => issue.includes("mismatch")) !== undefined
+			: issues.find(issue => issue.includes("mismatch")) !== undefined
 				? "PID_MISMATCH"
 				: issues.length > 0
 					? "STATUS_UNHEALTHY"

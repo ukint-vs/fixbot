@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { buildGhReadOnlyWrapperScript, createGhReadOnlyEnvironment } from "../src/gh-read-only";
 
 const tempPaths: string[] = [];

@@ -1,5 +1,5 @@
-import { generateKeyPairSync } from "node:crypto";
 import { describe, expect, it, mock } from "bun:test";
+import { generateKeyPairSync } from "node:crypto";
 import {
 	createAppJWT,
 	exchangeInstallationToken,
@@ -86,34 +86,33 @@ describe("isTokenExpiringSoon", () => {
 
 describe("exchangeInstallationToken", () => {
 	it("calls correct URL with Bearer JWT auth header", async () => {
-		const mockFetch = mock(() => {}).mockResolvedValue({
-			status: 201,
-			json: async () => ({
-				token: "ghs_test123",
-				expires_at: "2026-03-16T09:00:00Z",
+		const mockFetch = mock((_url: string, _init?: RequestInit) =>
+			Promise.resolve({
+				status: 201,
+				json: async () => ({ token: "ghs_test123", expires_at: "2026-03-16T09:00:00Z" }),
 			}),
-		});
+		);
 
 		await exchangeInstallationToken(100, testPrivateKey, 555, mockFetch as unknown as typeof fetch);
 
 		expect(mockFetch).toHaveBeenCalledTimes(1);
-		const [url, options] = mockFetch.mock.calls[0];
+		const [url, options] = mockFetch.mock.calls[0]!;
 		expect(url).toBe("https://api.github.com/app/installations/555/access_tokens");
-		expect(options.method).toBe("POST");
-		expect(options.headers.Authorization).toMatch(/^Bearer /);
-		expect(options.headers.Accept).toBe("application/vnd.github+json");
-		expect(options.headers["User-Agent"]).toBe("fixbot");
+		expect(options!.method).toBe("POST");
+		const headers = options!.headers as Record<string, string>;
+		expect(headers.Authorization).toMatch(/^Bearer /);
+		expect(headers.Accept).toBe("application/vnd.github+json");
+		expect(headers["User-Agent"]).toBe("fixbot");
 	});
 
 	it("returns parsed token and expiresAt Date", async () => {
 		const expiresAt = "2026-03-16T09:00:00Z";
-		const mockFetch = mock(() => {}).mockResolvedValue({
-			status: 201,
-			json: async () => ({
-				token: "ghs_abc",
-				expires_at: expiresAt,
+		const mockFetch = mock((_url: string, _init?: RequestInit) =>
+			Promise.resolve({
+				status: 201,
+				json: async () => ({ token: "ghs_abc", expires_at: expiresAt }),
 			}),
-		});
+		);
 
 		const result = await exchangeInstallationToken(1, testPrivateKey, 2, mockFetch as unknown as typeof fetch);
 
@@ -122,10 +121,12 @@ describe("exchangeInstallationToken", () => {
 	});
 
 	it("throws on non-201 response with status code in error message", async () => {
-		const mockFetch = mock(() => {}).mockResolvedValue({
-			status: 403,
-			text: async () => "Forbidden: app not installed",
-		});
+		const mockFetch = mock((_url: string, _init?: RequestInit) =>
+			Promise.resolve({
+				status: 403,
+				text: async () => "Forbidden: app not installed",
+			}),
+		);
 
 		await expect(
 			exchangeInstallationToken(1, testPrivateKey, 2, mockFetch as unknown as typeof fetch),

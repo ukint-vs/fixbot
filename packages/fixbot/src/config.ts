@@ -88,7 +88,7 @@ function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmi
 	const submission = assertObject(value, label);
 	const kind = submission.kind as string;
 	if (!VALID_SUBMISSION_KINDS.has(kind as DaemonSubmissionKind)) {
-		throw new Error(`${label}.kind must be one of ${[...VALID_SUBMISSION_KINDS].map((k) => `"${k}"`).join(", ")}`);
+		throw new Error(`${label}.kind must be one of ${[...VALID_SUBMISSION_KINDS].map(k => `"${k}"`).join(", ")}`);
 	}
 	const filePath = submission.filePath;
 	const result: DaemonSubmissionSourceV1 = {
@@ -227,7 +227,7 @@ function parseGitHubRepoConfigEntry(value: unknown, label: string): NormalizedDa
 			const valStr = assertNonEmptyString(val, `${label}.taskClassOverrides["${key}"]`);
 			if (!TASK_CLASSES.includes(valStr as TaskClass)) {
 				throw new Error(
-					`${label}.taskClassOverrides["${key}"] must be one of ${TASK_CLASSES.map((c) => `"${c}"`).join(", ")}`,
+					`${label}.taskClassOverrides["${key}"] must be one of ${TASK_CLASSES.map(c => `"${c}"`).join(", ")}`,
 				);
 			}
 			validated[key] = valStr as TaskClass;
@@ -370,9 +370,7 @@ export function normalizeDaemonStatus(value: unknown, label: string = "daemon st
 
 	const state = root.state;
 	if (typeof state !== "string" || !DAEMON_LIFECYCLE_STATES.includes(state as DaemonLifecycleState)) {
-		throw new Error(
-			`${label}.state must be one of ${DAEMON_LIFECYCLE_STATES.map((value) => `"${value}"`).join(", ")}`,
-		);
+		throw new Error(`${label}.state must be one of ${DAEMON_LIFECYCLE_STATES.map(value => `"${value}"`).join(", ")}`);
 	}
 
 	const normalizedState = state as DaemonLifecycleState;

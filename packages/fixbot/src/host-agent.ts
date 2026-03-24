@@ -1,10 +1,8 @@
 import { existsSync, statSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
-import { DEFAULT_MODEL_PER_PROVIDER, type Api, type KnownProvider, type Model } from "@oh-my-pi/pi-ai";
+import { type Api, DEFAULT_MODEL_PER_PROVIDER, type KnownProvider, type Model } from "@oh-my-pi/pi-ai";
 import { type AuthStorage, discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath, getAgentDir } from "@oh-my-pi/pi-utils";
-import type { DaemonModelConfig, ModelOverride, ModelSelection, NormalizedJobSpecV1 } from "./types";
+import type { DaemonModelConfig, ModelSelection, NormalizedJobSpecV1 } from "./types";
 
 export interface HostAgentConfig {
 	hostAgentDir: string;
@@ -68,9 +66,9 @@ export async function resolveExecutionModel(
 	// If job specifies a model override, find and validate it
 	if (job.execution.model) {
 		const override = job.execution.model;
-		const model = modelRegistry.getAvailable().find(
-			(m) => m.provider === override.provider && m.id === override.modelId,
-		);
+		const model = modelRegistry
+			.getAvailable()
+			.find(m => m.provider === override.provider && m.id === override.modelId);
 		if (!model) {
 			throw new Error(
 				`Requested model ${override.provider}/${override.modelId} is not available. Run 'fixbot auth' to configure API keys.`,
@@ -85,28 +83,24 @@ export async function resolveExecutionModel(
 	// Config-level model override from daemon.config.json
 	if (options.configModel) {
 		const cm = options.configModel;
-		const configMatch = available.find(
-			(m) => m.provider === cm.provider && m.id === cm.modelId,
-		);
+		const configMatch = available.find(m => m.provider === cm.provider && m.id === cm.modelId);
 		if (configMatch) {
 			return configMatch as Model<Api>;
 		}
 		throw new Error(
 			`Config model ${cm.provider}/${cm.modelId} is not available. ` +
-			`Check that the provider is authenticated ('fixbot login') and the model ID is correct.`,
+				`Check that the provider is authenticated ('fixbot login') and the model ID is correct.`,
 		);
 	}
 
 	// Prefer a provider's known-good default, iterating by provider priority
 	// (same order as coding-agent's model-resolver) rather than models.json insertion order
-	const selected = (Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]).reduce<Model<Api> | undefined>(
-		(found, provider) => {
+	const selected =
+		(Object.keys(DEFAULT_MODEL_PER_PROVIDER) as KnownProvider[]).reduce<Model<Api> | undefined>((found, provider) => {
 			if (found) return found;
 			const defaultId = DEFAULT_MODEL_PER_PROVIDER[provider];
-			return available.find((m) => m.provider === provider && m.id === defaultId);
-		},
-		undefined,
-	) ?? available[0];
+			return available.find(m => m.provider === provider && m.id === defaultId);
+		}, undefined) ?? available[0];
 	if (!selected) {
 		throw buildMissingModelError();
 	}
@@ -121,9 +115,9 @@ export async function resolvePlannedModel(
 	const modelRegistry = options.modelRegistry ?? new ModelRegistry(authStorage);
 	await modelRegistry.refresh();
 
-	const model = modelRegistry.getAvailable().find(
-		(m) => m.provider === selectedModel.provider && m.id === selectedModel.modelId,
-	);
+	const model = modelRegistry
+		.getAvailable()
+		.find(m => m.provider === selectedModel.provider && m.id === selectedModel.modelId);
 	if (!model) {
 		throw new Error(
 			`Selected model ${selectedModel.provider}/${selectedModel.modelId} is not available. Run 'fixbot auth' to configure API keys.`,

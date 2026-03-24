@@ -4,7 +4,7 @@ import { APP_NAME, checkConfigMigration, MIN_BUN_VERSION, VERSION } from "@oh-my
  * CLI entry point — registers all commands explicitly and delegates to the
  * lightweight CLI runner from pi-utils.
  */
-import { type CommandEntry, run } from "@oh-my-pi/pi-utils/cli";
+import { type CommandCtor, type CommandEntry, run } from "@oh-my-pi/pi-utils/cli";
 
 function parseSemver(version: string): [number, number, number] {
 	function toint(value: string): number {
@@ -44,21 +44,29 @@ process.title = APP_NAME;
 checkConfigMigration();
 
 /** Load a fixbot-package command via relative path, with a stub fallback when not available. */
-function fixbotCommand(relativePath: string, description: string): () => Promise<unknown> {
-	return () => import(relativePath).then(m => m.default).catch(() => {
-		// Return a stub command class so help rendering works even without the fixbot package.
-		// Uses a plain class (no require() or import) to avoid ESM/CJS issues.
-		return class {
-			static description = `${description} (requires monorepo install)`;
-			static args = {};
-			static flags = {};
-			constructor(public argv: string[], public config: unknown) {}
-			parse(_: unknown) { return { args: {}, flags: {} }; }
-			async run() {
-				throw new Error("This command requires a full fixbot monorepo install. See README for instructions.");
-			}
-		};
-	});
+function fixbotCommand(relativePath: string, description: string): () => Promise<CommandCtor> {
+	return () =>
+		import(relativePath)
+			.then(m => m.default as CommandCtor)
+			.catch(() => {
+				// Return a stub command class so help rendering works even without the fixbot package.
+				// Uses a plain class (no require() or import) to avoid ESM/CJS issues.
+				return class {
+					static description = `${description} (requires monorepo install)`;
+					static args: Record<string, unknown> = {};
+					static flags: Record<string, unknown> = {};
+					constructor(
+						public argv: string[],
+						public config: unknown,
+					) {}
+					parse(_: unknown) {
+						return { args: {}, flags: {} };
+					}
+					async run() {
+						throw new Error("This command requires a full fixbot monorepo install. See README for instructions.");
+					}
+				} as unknown as CommandCtor;
+			});
 }
 
 const commands: CommandEntry[] = [
@@ -66,10 +74,16 @@ const commands: CommandEntry[] = [
 	{ name: "agents", load: () => import("./commands/agents").then(m => m.default) },
 	{ name: "commit", load: () => import("./commands/commit").then(m => m.default) },
 	{ name: "config", load: () => import("./commands/config").then(m => m.default) },
-	{ name: "__internal-run", load: fixbotCommand("../../fixbot/src/commands/internal-run", "Execute a prepared fixbot job (internal)") },
+	{
+		name: "__internal-run",
+		load: fixbotCommand("../../fixbot/src/commands/internal-run", "Execute a prepared fixbot job (internal)"),
+	},
 	{ name: "daemon", load: fixbotCommand("../../fixbot/src/commands/daemon", "Manage the fixbot daemon") },
 	{ name: "grep", load: () => import("./commands/grep").then(m => m.default) },
-	{ name: "init", load: fixbotCommand("../../fixbot/src/commands/init", "Interactive setup wizard for fixbot daemon") },
+	{
+		name: "init",
+		load: fixbotCommand("../../fixbot/src/commands/init", "Interactive setup wizard for fixbot daemon"),
+	},
 	{ name: "jupyter", load: () => import("./commands/jupyter").then(m => m.default) },
 	{ name: "login", load: () => import("./commands/login").then(m => m.default) },
 	{ name: "logout", load: () => import("./commands/logout").then(m => m.default) },
@@ -80,7 +94,10 @@ const commands: CommandEntry[] = [
 	{ name: "ssh", load: () => import("./commands/ssh").then(m => m.default) },
 	{ name: "stats", load: () => import("./commands/stats").then(m => m.default) },
 	{ name: "update", load: () => import("./commands/update").then(m => m.default) },
-	{ name: "validate-job", load: fixbotCommand("../../fixbot/src/commands/validate-job", "Validate a fixbot job spec") },
+	{
+		name: "validate-job",
+		load: fixbotCommand("../../fixbot/src/commands/validate-job", "Validate a fixbot job spec"),
+	},
 	{ name: "search", load: () => import("./commands/web-search").then(m => m.default), aliases: ["q"] },
 ];
 

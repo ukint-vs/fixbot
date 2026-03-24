@@ -1,6 +1,6 @@
+import { describe, expect, it } from "bun:test";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { describe, expect, it } from "bun:test";
 import {
 	createDaemonStatus,
 	DAEMON_STATUS_VERSION_V1,

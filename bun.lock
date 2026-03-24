@@ -83,6 +83,7 @@
         "@oh-my-pi/pi-ai": "workspace:*",
         "@oh-my-pi/pi-coding-agent": "workspace:*",
         "@oh-my-pi/pi-utils": "workspace:*",
+        "chalk": "^5.6",
       },
     },
     "packages/natives": {

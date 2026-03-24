@@ -2,7 +2,7 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync }
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-	AgentSession,
+	type AgentSession,
 	type AgentSessionEvent,
 	createAgentSession,
 	discoverAuthStorage,
@@ -55,7 +55,7 @@ function appendChunkAndExtractLines(buffer: string, chunk: string): { nextBuffer
 	const nextBuffer = lines.pop() ?? "";
 	return {
 		nextBuffer,
-		lines: lines.filter((line) => line.trim() !== ""),
+		lines: lines.filter(line => line.trim() !== ""),
 	};
 }
 
@@ -368,7 +368,7 @@ export class CodingAgentSessionDriver implements SessionDriver {
 			dir: skillsDir,
 			source: "fixbot:daemon",
 		});
-		const taskSkill = fixbotSkills.filter((s) => s.name === expectedSkillName);
+		const taskSkill = fixbotSkills.filter(s => s.name === expectedSkillName);
 		if (taskSkill.length !== 1) {
 			throw new Error(`Expected exactly one bundled ${expectedSkillName} skill, found ${taskSkill.length}`);
 		}
@@ -394,11 +394,13 @@ export class CodingAgentSessionDriver implements SessionDriver {
 		const authStorage = await discoverAuthStorage();
 		const modelRegistry = new ModelRegistry(authStorage);
 		await modelRegistry.refresh();
-		const model = modelRegistry.getAvailable().find(
-			(m) => m.provider === input.selectedModel.provider && m.id === input.selectedModel.modelId,
-		);
+		const model = modelRegistry
+			.getAvailable()
+			.find(m => m.provider === input.selectedModel.provider && m.id === input.selectedModel.modelId);
 		if (!model) {
-			throw new Error(`Model ${input.selectedModel.provider}/${input.selectedModel.modelId} not available. Run 'fixbot auth' to configure API keys.`);
+			throw new Error(
+				`Model ${input.selectedModel.provider}/${input.selectedModel.modelId} not available. Run 'fixbot auth' to configure API keys.`,
+			);
 		}
 		logProgress(`selected model ${model.provider}/${model.id}`);
 		const toolBinDir = join(input.isolatedAgentDir, "bin");
@@ -446,7 +448,7 @@ export class CodingAgentSessionDriver implements SessionDriver {
 					settings: Settings.isolated(),
 				})
 			).session;
-			unsubscribe = session.subscribe((event) => {
+			unsubscribe = session.subscribe(event => {
 				traceStream.write(`${JSON.stringify(serializeTraceEvent(event))}\n`);
 				if ("errorMessage" in event && typeof event.errorMessage === "string" && event.errorMessage.trim() !== "") {
 					assistantError = event.errorMessage;

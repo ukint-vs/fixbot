@@ -1,5 +1,5 @@
-import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, mock } from "bun:test";
+import { createHash } from "node:crypto";
 import {
 	buildGitHubJobSpec,
 	deriveGitHubJobId,
@@ -125,7 +125,7 @@ describe("buildGitHubJobSpec", () => {
 		expect(spec.repo.baseBranch).toBe("main");
 		expect(spec.fixCi!.githubActionsRunId).toBe(12345);
 		expect(spec.execution.mode).toBe("process");
-		expect(spec.execution.timeoutMs).toBe(600_000);
+		expect(spec.execution.timeoutMs).toBe(1_800_000);
 		expect(spec.execution.memoryLimitMb).toBe(4096);
 		expect(spec.jobId).toMatch(/^gh-[a-f0-9]{16}$/);
 	});
@@ -183,7 +183,7 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const enqueued: DaemonJobEnvelopeV1[] = [];
-		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+		const enqueueFn: GitHubEnqueueFn = envelope => enqueued.push(envelope);
 
 		const result = await pollGitHubRepos(FIX_CI_CONFIG, RESULTS_DIR, enqueueFn);
 
@@ -288,12 +288,12 @@ describe("pollGitHubRepos", () => {
 
 		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
 		const logs: string[] = [];
-		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn, (msg) => logs.push(msg));
+		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn, msg => logs.push(msg));
 
 		expect(enqueueFn).not.toHaveBeenCalled();
 		expect(result.enqueued).toHaveLength(0);
 		expect(result.errors).toBe(0);
-		expect(logs.some((l) => l.includes("403"))).toBe(true);
+		expect(logs.some(l => l.includes("403"))).toBe(true);
 	});
 
 	it("logs summary line with repo/enqueued/skipped/error counts", async () => {
@@ -306,9 +306,9 @@ describe("pollGitHubRepos", () => {
 
 		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
 		const logs: string[] = [];
-		await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn, (msg) => logs.push(msg));
+		await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn, msg => logs.push(msg));
 
-		expect(logs.some((l) => l.includes("github-poll repos=1 enqueued=0 skipped=0 errors=0"))).toBe(true);
+		expect(logs.some(l => l.includes("github-poll repos=1 enqueued=0 skipped=0 errors=0"))).toBe(true);
 	});
 
 	it("github token never appears in log output", async () => {
@@ -320,7 +320,12 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const logs: string[] = [];
-		await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, mock(() => undefined), (msg) => logs.push(msg));
+		await pollGitHubRepos(
+			BASE_CONFIG,
+			RESULTS_DIR,
+			mock(() => undefined),
+			msg => logs.push(msg),
+		);
 
 		for (const log of logs) {
 			expect(log).not.toContain("fake-token");
@@ -365,7 +370,7 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const enqueued: DaemonJobEnvelopeV1[] = [];
-		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+		const enqueueFn: GitHubEnqueueFn = envelope => enqueued.push(envelope);
 
 		const result = await pollGitHubRepos(config, RESULTS_DIR, enqueueFn);
 
@@ -412,7 +417,7 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const enqueued: DaemonJobEnvelopeV1[] = [];
-		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+		const enqueueFn: GitHubEnqueueFn = envelope => enqueued.push(envelope);
 
 		await pollGitHubRepos(config, RESULTS_DIR, enqueueFn);
 
@@ -441,7 +446,7 @@ describe("pollGitHubRepos", () => {
 		]);
 
 		const enqueued: DaemonJobEnvelopeV1[] = [];
-		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+		const enqueueFn: GitHubEnqueueFn = envelope => enqueued.push(envelope);
 
 		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
 

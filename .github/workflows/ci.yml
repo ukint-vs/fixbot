@@ -132,6 +132,17 @@ jobs:
           bun packages/coding-agent/src/cli.ts --version
           bun packages/coding-agent/src/cli.ts --help
           bun packages/coding-agent/src/cli.ts stats --help
+      - name: Fixbot daemon CLI smoke test
+        run: |
+          # Verify fixbot commands load (not stub fallbacks).
+          # Stubs include "(requires monorepo install)" in their description.
+          for cmd in daemon run validate-job init; do
+            output=$(bun packages/coding-agent/src/cli.ts $cmd --help 2>&1)
+            if echo "$output" | grep -q "requires monorepo install"; then
+              echo "FAIL: '$cmd' loaded stub fallback instead of real command"
+              exit 1
+            fi
+          done
 
   install_methods:
     runs-on: ubuntu-22.04

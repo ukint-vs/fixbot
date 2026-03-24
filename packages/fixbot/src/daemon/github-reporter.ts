@@ -1,6 +1,6 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
-import { join } from "node:path";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { spawnCommandOrThrow } from "../command";
 import { configureLocalGitIdentity, tryEnableGpgSigning } from "../git";
 import type { DaemonJobEnvelopeV1, DaemonSubmissionSourceV1, JobResultV1, NormalizedDaemonConfigV1 } from "../types";
@@ -112,7 +112,9 @@ export async function fetchGitHubUserIdentity(
 	if (data.id !== undefined) {
 		return { name, email: `${data.id}+${data.login}@users.noreply.github.com` };
 	}
-	logger?.(`[fixbot] github-reporter: user ID not available to construct noreply email — falling back to generic identity`);
+	logger?.(
+		`[fixbot] github-reporter: user ID not available to construct noreply email — falling back to generic identity`,
+	);
 	return null;
 }
 
@@ -254,9 +256,7 @@ export function buildPRTitle(result: JobResultV1, submission: DaemonSubmissionSo
 		case "fix_tests":
 			return hasUsefulSummary ? summaryTitle : `fixbot: test fixes`;
 		case "solve_issue":
-			return hasUsefulSummary
-				? summaryTitle
-				: `fixbot: fix for issue #${submission.githubIssueNumber}`;
+			return hasUsefulSummary ? summaryTitle : `fixbot: fix for issue #${submission.githubIssueNumber}`;
 		case "fix_cve":
 			return hasUsefulSummary ? summaryTitle : "fixbot: CVE remediation";
 		default:
@@ -289,9 +289,7 @@ export function buildPRBody(
 	// Include the full agent output when it's longer than the summary (has explanation/table/etc.)
 	let fullText = "";
 	try {
-		fullText = result.artifacts.assistantFinalFile
-			? readFileSync(result.artifacts.assistantFinalFile, "utf-8")
-			: "";
+		fullText = result.artifacts.assistantFinalFile ? readFileSync(result.artifacts.assistantFinalFile, "utf-8") : "";
 	} catch {
 		// Best-effort — file may not exist
 	}
@@ -300,7 +298,7 @@ export function buildPRBody(
 		// Strip the marker lines from the output
 		const cleaned = fullText
 			.split("\n")
-			.filter((l) => !/^(?:FIXBOT|GITFIX)_(?:RESULT|SUMMARY|FAILURE_REASON):/.test(l))
+			.filter(l => !/^(?:FIXBOT|GITFIX)_(?:RESULT|SUMMARY|FAILURE_REASON):/.test(l))
 			.join("\n")
 			.trim();
 		lines.push(cleaned, "", "</details>", "");
@@ -429,7 +427,14 @@ export async function reportJobResult(
 			}
 		}
 
-		await createAndPushBranch(result.execution.workspaceDir, branchName, githubRepo, token, logger, config.github?.gpgKeyId);
+		await createAndPushBranch(
+			result.execution.workspaceDir,
+			branchName,
+			githubRepo,
+			token,
+			logger,
+			config.github?.gpgKeyId,
+		);
 
 		const title = buildPRTitle(result, envelope.submission);
 		const prBody = buildPRBody(result, envelope.jobId, envelope.submission, config.identity.botUrl);

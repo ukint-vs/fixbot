@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { normalizeJobSpec } from "../src/contracts";
 import { enqueueDaemonJob } from "../src/daemon/job-store";
@@ -73,7 +73,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -129,7 +129,7 @@ interface ReporterCallRecord {
 
 function createPollerThatEnqueuesOnce(jobId: string): GitHubPollerFn {
 	let pollCount = 0;
-	return async (cfg) => {
+	return async cfg => {
 		pollCount++;
 		if (pollCount === 1) {
 			const jobSpec = normalizeJobSpec(
@@ -190,7 +190,7 @@ async function startForegroundDaemonWithReporter(
 
 	const readyStatus = await waitFor(
 		() => readDaemonStatusFile(config),
-		(status) => status?.state === "idle" && status.pid === process.pid,
+		status => status?.state === "idle" && status.pid === process.pid,
 		5_000,
 	);
 	expect(readyStatus?.state).toBe("idle");
@@ -225,7 +225,7 @@ describe("daemon GitHub reporter integration", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -270,7 +270,7 @@ describe("daemon GitHub reporter integration", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -307,7 +307,7 @@ describe("daemon GitHub reporter integration", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
+			status => status?.state === "idle" && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 

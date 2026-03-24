@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonStatus, normalizeDaemonStatus } from "../src/config";
 import { enqueueDaemonJobFromFile } from "../src/daemon/enqueue";
@@ -93,7 +93,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -163,7 +163,7 @@ async function startForegroundDaemon(
 
 	const readyStatus = await waitFor(
 		() => readDaemonStatusFile(config),
-		(status) => status?.state === "idle" && status.pid === process.pid,
+		status => status?.state === "idle" && status.pid === process.pid,
 		5_000,
 	);
 	expect(readyStatus?.state).toBe("idle");
@@ -459,7 +459,7 @@ describe("daemon status contract", () => {
 		await runnerStarted.promise;
 		const runningStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "running" && status.activeJob?.jobId === "manual-enqueue-job",
+			status => status?.state === "running" && status.activeJob?.jobId === "manual-enqueue-job",
 			5_000,
 		);
 		expect(runningStatus?.queue).toEqual({
@@ -475,7 +475,7 @@ describe("daemon status contract", () => {
 		allowRunnerToFail.resolve();
 		const failedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) =>
+			status =>
 				status?.state === "idle" &&
 				status.activeJob === null &&
 				status.recentResults[0]?.jobId === "manual-enqueue-job",

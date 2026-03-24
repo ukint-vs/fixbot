@@ -55,13 +55,13 @@ export function formatLogLine(level: LogLevel, component: string, message: strin
  */
 export function createStderrLogger(component: string): Logger {
 	function emit(level: LogLevel, message: string): void {
-		process.stderr.write(formatLogLine(level, component, message) + "\n");
+		process.stderr.write(`${formatLogLine(level, component, message)}\n`);
 	}
 	return {
-		info: (msg) => emit("info", msg),
-		warn: (msg) => emit("warn", msg),
-		error: (msg) => emit("error", msg),
-		success: (msg) => emit("success", msg),
+		info: msg => emit("info", msg),
+		warn: msg => emit("warn", msg),
+		error: msg => emit("error", msg),
+		success: msg => emit("success", msg),
 	};
 }
 
@@ -86,9 +86,17 @@ export function createNoopLogger(): Logger {
 export function toLogCallback(logger: Logger): (message: string) => void {
 	return (message: string) => {
 		// Match explicit level tags used in legacy messages, not substrings like "errors=0"
-		if (/ error[:= ]| error$/i.test(message) || message.includes("-poll error:") || message.includes("-report error:")) {
+		if (
+			/ error[:= ]| error$/i.test(message) ||
+			message.includes("-poll error:") ||
+			message.includes("-report error:")
+		) {
 			logger.error(message);
-		} else if (/ warn[:= ]| warn$/i.test(message) || message.includes("-poll warn:") || message.includes("-report warn:")) {
+		} else if (
+			/ warn[:= ]| warn$/i.test(message) ||
+			message.includes("-poll warn:") ||
+			message.includes("-report warn:")
+		) {
 			logger.warn(message);
 		} else {
 			logger.info(message);
@@ -103,9 +111,9 @@ export function createCapturingLogger(): Logger & { lines: string[] } {
 	}
 	return {
 		lines,
-		info: (msg) => record("info", msg),
-		warn: (msg) => record("warn", msg),
-		error: (msg) => record("error", msg),
-		success: (msg) => record("success", msg),
+		info: msg => record("info", msg),
+		warn: msg => record("warn", msg),
+		error: msg => record("error", msg),
+		success: msg => record("success", msg),
 	};
 }

@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { loadDaemonConfig } from "../src/config";
 import { getDaemonStatusFromConfigFile, runDaemon } from "../src/daemon/service";
 import { readDaemonStatusFile } from "../src/daemon/status-store";
@@ -57,7 +57,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -86,7 +86,7 @@ describe("daemon health", () => {
 		// Wait for the daemon to reach idle state
 		const idleStatus = await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status?.state === "idle" && status.pid === process.pid,
+			status => status?.state === "idle" && status.pid === process.pid,
 			5_000,
 		);
 		expect(idleStatus?.state).toBe("idle");

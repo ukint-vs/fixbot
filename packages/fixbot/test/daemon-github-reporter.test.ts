@@ -1,7 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import { mkdtempSync, rmdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test";
 import {
 	buildFailureCommentBody,
 	buildNoPatchCommentBody,
@@ -194,7 +194,7 @@ describe("buildPRBody", () => {
 		const submission = makeSubmission();
 		const body = buildPRBody(result, "job-abc", submission, "https://github.com/nicobailon/fixbot");
 
-		expect(body).toContain("fixbot repair summary");
+		expect(body).toContain("## Summary");
 		expect(body).toContain("Fixed the flaky test");
 		expect(body).toContain("github.com/nicobailon/fixbot");
 		expect(body).toContain("#12345");
@@ -296,12 +296,12 @@ describe("reportJobResult", () => {
 		);
 
 		const logs: string[] = [];
-		await reportJobResult(envelope, result, config, (msg) => logs.push(msg));
+		await reportJobResult(envelope, result, config, msg => logs.push(msg));
 
 		// spawnCommandOrThrow called for git operations
 		expect(spawnCommandOrThrow).toHaveBeenCalled();
 		const calls = (spawnCommandOrThrow as ReturnType<typeof mock>).mock.calls;
-		const gitCommands = calls.map((c) => `${c[0]} ${c[1][0]}`);
+		const gitCommands = calls.map(c => `${c[0]} ${c[1][0]}`);
 		expect(gitCommands).toContain("git checkout");
 		expect(gitCommands).toContain("git add");
 		expect(gitCommands).toContain("git commit");
@@ -316,7 +316,7 @@ describe("reportJobResult", () => {
 		expect(fetchBody.head).toBe("fixbot/job-abc");
 		expect(fetchBody.base).toBe("main");
 
-		expect(logs.some((l) => l.includes("opened PR #42"))).toBe(true);
+		expect(logs.some(l => l.includes("opened PR #42"))).toBe(true);
 
 		try {
 			rmdirSync(tmpDir);
@@ -335,7 +335,7 @@ describe("reportJobResult", () => {
 		);
 
 		const logs: string[] = [];
-		await reportJobResult(envelope, result, config, (msg) => logs.push(msg));
+		await reportJobResult(envelope, result, config, msg => logs.push(msg));
 
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 		const [fetchUrl, fetchInit] = mockFetch.mock.calls[0] as [string, RequestInit];
@@ -344,7 +344,7 @@ describe("reportJobResult", () => {
 		expect(fetchBody.body).toContain("<!-- fixbot-result -->");
 		expect(fetchBody.body).toContain("Type check failed");
 
-		expect(logs.some((l) => l.includes("posted comment on test-owner/test-repo#7"))).toBe(true);
+		expect(logs.some(l => l.includes("posted comment on test-owner/test-repo#7"))).toBe(true);
 	});
 
 	it("no-patch success: posts comment, not PR", async () => {
@@ -408,17 +408,17 @@ describe("reportJobResult", () => {
 		);
 
 		const logs: string[] = [];
-		await reportJobResult(envelope, result, config, (msg) => logs.push(msg));
+		await reportJobResult(envelope, result, config, msg => logs.push(msg));
 
 		// No git commands for push
-		expect((spawnCommandOrThrow as ReturnType<typeof mock>)).not.toHaveBeenCalled();
+		expect(spawnCommandOrThrow as ReturnType<typeof mock>).not.toHaveBeenCalled();
 
 		// Comment posted instead
 		expect(mockFetch).toHaveBeenCalledTimes(1);
 		const [fetchUrl] = mockFetch.mock.calls[0] as [string];
 		expect(fetchUrl).toContain("/issues/7/comments");
 
-		expect(logs.some((l) => l.includes("workspace missing"))).toBe(true);
+		expect(logs.some(l => l.includes("workspace missing"))).toBe(true);
 	});
 });
 
@@ -429,10 +429,10 @@ describe("reportJobResult", () => {
 describe("fetchGitHubUserIdentity", () => {
 	it("returns name and email from the API response", async () => {
 		mockFetch.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({ login: "octocat", id: 1, name: "The Octocat", email: "octocat@github.com" }),
-				{ status: 200, headers: { "Content-Type": "application/json" } },
-			),
+			new Response(JSON.stringify({ login: "octocat", id: 1, name: "The Octocat", email: "octocat@github.com" }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			}),
 		);
 		const identity = await fetchGitHubUserIdentity("ghp_token");
 		expect(identity).toEqual({ name: "The Octocat", email: "octocat@github.com" });
@@ -440,10 +440,10 @@ describe("fetchGitHubUserIdentity", () => {
 
 	it("falls back to noreply email when email is null", async () => {
 		mockFetch.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({ login: "octocat", id: 583231, name: "The Octocat", email: null }),
-				{ status: 200, headers: { "Content-Type": "application/json" } },
-			),
+			new Response(JSON.stringify({ login: "octocat", id: 583231, name: "The Octocat", email: null }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			}),
 		);
 		const identity = await fetchGitHubUserIdentity("ghp_token");
 		expect(identity).toEqual({ name: "The Octocat", email: "583231+octocat@users.noreply.github.com" });
@@ -451,10 +451,10 @@ describe("fetchGitHubUserIdentity", () => {
 
 	it("uses login as name when display name is null", async () => {
 		mockFetch.mockResolvedValueOnce(
-			new Response(
-				JSON.stringify({ login: "octocat", id: 1, name: null, email: "octocat@github.com" }),
-				{ status: 200, headers: { "Content-Type": "application/json" } },
-			),
+			new Response(JSON.stringify({ login: "octocat", id: 1, name: null, email: "octocat@github.com" }), {
+				status: 200,
+				headers: { "Content-Type": "application/json" },
+			}),
 		);
 		const identity = await fetchGitHubUserIdentity("ghp_token");
 		expect(identity).toEqual({ name: "octocat", email: "octocat@github.com" });
@@ -486,34 +486,54 @@ describe("buildPRTitle", () => {
 		expect(title).toContain("12345");
 	});
 
-	it("fix_lint result includes 'lint fixes'", () => {
-		const result = makeResult({ taskClass: "fix_lint", fixCi: undefined, fixLint: {} });
+	it("fix_lint result includes 'lint fixes' when no useful summary", () => {
+		const result = makeResult({ taskClass: "fix_lint", fixCi: undefined, fixLint: {}, summary: undefined });
 		const submission = makeSubmission({ githubActionsRunId: undefined, githubRepo: "owner/repo" });
 		const title = buildPRTitle(result, submission);
 		expect(title).toContain("lint fixes");
-		expect(title).toContain("owner/repo");
 	});
 
-	it("fix_tests result includes 'test fixes'", () => {
-		const result = makeResult({ taskClass: "fix_tests", fixCi: undefined, fixTests: {} });
+	it("fix_tests result includes 'test fixes' when no useful summary", () => {
+		const result = makeResult({ taskClass: "fix_tests", fixCi: undefined, fixTests: {}, summary: undefined });
 		const submission = makeSubmission({ githubActionsRunId: undefined, githubRepo: "owner/repo" });
 		const title = buildPRTitle(result, submission);
 		expect(title).toContain("test fixes");
-		expect(title).toContain("owner/repo");
 	});
 
-	it("solve_issue result includes issue number", () => {
-		const result = makeResult({ taskClass: "solve_issue", fixCi: undefined, solveIssue: { issueNumber: 42 } });
+	it("solve_issue result includes issue number when no useful summary", () => {
+		const result = makeResult({
+			taskClass: "solve_issue",
+			fixCi: undefined,
+			solveIssue: { issueNumber: 42 },
+			summary: undefined,
+		});
 		const submission = makeSubmission({ githubActionsRunId: undefined, githubIssueNumber: 42 });
 		const title = buildPRTitle(result, submission);
 		expect(title).toContain("#42");
 	});
 
-	it("fix_cve result says CVE remediation", () => {
-		const result = makeResult({ taskClass: "fix_cve", fixCi: undefined, fixCve: { cveId: "CVE-2024-1234" } });
+	it("fix_cve result says CVE remediation when no useful summary", () => {
+		const result = makeResult({
+			taskClass: "fix_cve",
+			fixCi: undefined,
+			fixCve: { cveId: "CVE-2024-1234" },
+			summary: undefined,
+		});
 		const submission = makeSubmission({ githubActionsRunId: undefined });
 		const title = buildPRTitle(result, submission);
 		expect(title).toContain("CVE remediation");
+	});
+
+	it("uses agent summary as title when summary is useful", () => {
+		const result = makeResult({
+			taskClass: "fix_lint",
+			fixCi: undefined,
+			fixLint: {},
+			summary: "Fixed missing semicolons across 3 files",
+		});
+		const submission = makeSubmission({ githubActionsRunId: undefined });
+		const title = buildPRTitle(result, submission);
+		expect(title).toBe("Fixed missing semicolons across 3 files");
 	});
 });
 

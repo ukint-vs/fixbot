@@ -31,3 +31,13 @@
 
 **Effort:** M (human: ~2hr / CC: ~15min)
 **Depends on:** Rebrand PR landed
+
+## P2.5: Fix internal-runner tests after AuthStorage.inMemory removal
+
+**What:** Update 4 tests in `internal-runner.test.ts` that use `AuthStorage.inMemory()` which was removed from `@oh-my-pi/pi-coding-agent`. The `resolveExecutionModel` tests need a new mock auth pattern.
+
+**Why:** These tests fail with `TypeError: AuthStorage.inMemory is not a function`. They test model resolution priority (explicit override, provider default, fallback, no-auth failure). Without them, model selection regressions go undetected.
+
+**Context:** `AuthStorage.inMemory` was the test-friendly way to inject fake API key credentials. The `AuthStorage` class likely now uses a different pattern (file-based, or a different static factory). Check `packages/coding-agent/test/` for the current mock pattern used in the upstream tests. The 4 failing tests are: `resolves an explicit model override`, `uses the provider default model`, `falls back to provider default`, `fails fast when no authenticated models`.
+
+**Effort:** S (human: ~1hr / CC: ~10min)

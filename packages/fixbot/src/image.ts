@@ -64,8 +64,8 @@ export function getRunnerImageVersionLabel(): string {
 }
 
 function assertDockerBuildAssetsExist(repoRoot: string): void {
-	const missing = DOCKER_BUILD_ASSETS.filter((asset) => asset.required && !existsSync(join(repoRoot, asset.path))).map(
-		(asset) => asset.path,
+	const missing = DOCKER_BUILD_ASSETS.filter(asset => asset.required && !existsSync(join(repoRoot, asset.path))).map(
+		asset => asset.path,
 	);
 
 	if (missing.length === 0) {
@@ -79,7 +79,7 @@ function assertDockerBuildAssetsExist(repoRoot: string): void {
 			"Build the required workspace packages first, then rerun `fixbot image build`.",
 			"",
 			"Missing runtime assets:",
-			...missing.map((entry) => `- ${entry}`),
+			...missing.map(entry => `- ${entry}`),
 		].join("\n"),
 	);
 }
@@ -200,8 +200,8 @@ export async function buildDockerImage(
 			],
 			{
 				cwd: buildContext.contextDir,
-				onStdout: (chunk) => process.stderr.write(chunk),
-				onStderr: (chunk) => process.stderr.write(chunk),
+				onStdout: chunk => process.stderr.write(chunk),
+				onStderr: chunk => process.stderr.write(chunk),
 			},
 		);
 		return buildContext.imageName;
@@ -211,5 +211,5 @@ export async function buildDockerImage(
 }
 
 export function getDockerBuildAssets(): string[] {
-	return DOCKER_BUILD_ASSETS.map((asset) => asset.path);
+	return DOCKER_BUILD_ASSETS.map(asset => asset.path);
 }

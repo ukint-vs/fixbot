@@ -74,7 +74,7 @@ async function executeInChildProcess(context: PreparedJobContext): Promise<Execu
 	const cliScript = getCliScriptPath();
 	logProgress(`starting local executor for job ${context.job.jobId}`);
 	const nodeArgs = [
-		...process.execArgv.filter((arg) => !arg.startsWith("--max-old-space-size=")),
+		...process.execArgv.filter(arg => !arg.startsWith("--max-old-space-size=")),
 		`--max-old-space-size=${context.job.execution.memoryLimitMb}`,
 		cliScript,
 		"__internal-run",
@@ -154,12 +154,7 @@ export function buildDockerEnvArgs(hostConfig: HostAgentConfig, env: NodeJS.Proc
 
 	// Mount the host agent directory (contains agent.db with auth)
 	if (hostConfig.hostAgentDirExists) {
-		args.push(
-			"-v",
-			`${hostConfig.hostAgentDir}:/fixbot-host-agent:ro`,
-			"-e",
-			"FIXBOT_AGENT_DIR=/fixbot-host-agent",
-		);
+		args.push("-v", `${hostConfig.hostAgentDir}:/fixbot-host-agent:ro`, "-e", "FIXBOT_AGENT_DIR=/fixbot-host-agent");
 	}
 
 	// Pass through provider API key env vars
