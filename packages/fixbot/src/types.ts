@@ -16,6 +16,11 @@ export type SandboxMode = "workspace-write" | "read-only";
 export type DaemonLifecycleState = (typeof DAEMON_LIFECYCLE_STATES)[number];
 export type DaemonStatusFormat = "json";
 export type DaemonSubmissionKind = "cli" | "github-label" | "github-webhook";
+export const VALID_SUBMISSION_KINDS: ReadonlySet<DaemonSubmissionKind> = new Set<DaemonSubmissionKind>([
+	"cli",
+	"github-label",
+	"github-webhook",
+]);
 
 export interface RepoTarget {
 	url: string;

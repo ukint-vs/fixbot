@@ -23,6 +23,7 @@ import {
 	type ResultStatus,
 	TASK_CLASSES,
 	type TaskClass,
+	VALID_SUBMISSION_KINDS,
 } from "./types";
 import {
 	assertBoolean,
@@ -81,8 +82,6 @@ function parseDaemonErrorSummary(value: unknown, label: string): DaemonErrorSumm
 export const DEFAULT_GITHUB_POLL_INTERVAL_MS = 60_000;
 export const DEFAULT_WEBHOOK_PORT = 8787;
 export const DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN = 10;
-
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-webhook"]);
 
 function parseDaemonSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 | undefined {
 	if (value === undefined) {
@@ -292,8 +291,17 @@ function normalizeWebhookConfig(raw: unknown, label: string): NormalizedDaemonWe
 	const wh = assertObject(raw, label);
 	const enabled = wh.enabled === undefined ? false : assertBoolean(wh.enabled, `${label}.enabled`);
 	const port = wh.port === undefined ? DEFAULT_WEBHOOK_PORT : assertPositiveInteger(wh.port, `${label}.port`);
+	if (enabled && (wh.secret === undefined || wh.secret === "")) {
+		throw new Error(
+			`${label}.secret is required when webhook is enabled. ` +
+				"Set it to the GitHub webhook secret configured for your repository.",
+		);
+	}
 	const secret = assertNonEmptyString(wh.secret, `${label}.secret`);
-	const rateLimitPerRepoPerMin = wh.rateLimitPerRepoPerMin === undefined ? DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN : assertPositiveInteger(wh.rateLimitPerRepoPerMin, `${label}.rateLimitPerRepoPerMin`);
+	const rateLimitPerRepoPerMin =
+		wh.rateLimitPerRepoPerMin === undefined
+			? DEFAULT_WEBHOOK_RATE_LIMIT_PER_REPO_PER_MIN
+			: assertPositiveInteger(wh.rateLimitPerRepoPerMin, `${label}.rateLimitPerRepoPerMin`);
 	return { enabled, port, secret, rateLimitPerRepoPerMin };
 }
 

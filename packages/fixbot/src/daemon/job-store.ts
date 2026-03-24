@@ -9,6 +9,7 @@ import {
 	type DaemonSubmissionKind,
 	type DaemonSubmissionSourceV1,
 	type NormalizedDaemonConfigV1,
+	VALID_SUBMISSION_KINDS,
 } from "../types";
 import { assertNonEmptyString, assertObject, assertPositiveInteger, assertTimestamp } from "../validation";
 
@@ -57,8 +58,6 @@ export class DuplicateDaemonJobError extends Error {
 		this.collisions = collisions.map((collision) => ({ ...collision }));
 	}
 }
-
-const VALID_SUBMISSION_KINDS = new Set<DaemonSubmissionKind>(["cli", "github-label", "github-webhook"]);
 
 function parseSubmissionSource(value: unknown, label: string): DaemonSubmissionSourceV1 {
 	const submission = assertObject(value, label);

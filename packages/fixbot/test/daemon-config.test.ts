@@ -629,7 +629,7 @@ describe("daemon config webhook section", () => {
 		});
 
 		expect(() => parseDaemonConfigText(invalid, fixtureConfigPath)).toThrow(
-			`${fixtureConfigPath}.webhook.secret must be a non-empty string`,
+			`${fixtureConfigPath}.webhook.secret is required when webhook is enabled`,
 		);
 	});
 

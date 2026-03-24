@@ -1,6 +1,7 @@
 import { createHash, createHmac, timingSafeEqual } from "node:crypto";
 import { getArtifactPaths } from "../artifacts";
 import { normalizeJobSpec } from "../contracts";
+import { parseOwnerRepo } from "../github-utils";
 import type { Logger } from "../logger";
 import {
 	DAEMON_JOB_ENVELOPE_VERSION_V1,
@@ -84,16 +85,11 @@ export function findRepoConfig(
 	const fullNameLower = repoFullName.toLowerCase();
 	return config.github?.repos.find((r) => {
 		try {
-			const url = new URL(r.url);
-			const pathParts = url.pathname.replace(/\.git$/, "").split("/").filter(Boolean);
-			if (pathParts.length >= 2) {
-				const ownerRepo = `${pathParts[0]}/${pathParts[1]}`.toLowerCase();
-				return ownerRepo === fullNameLower;
-			}
+			const parsed = parseOwnerRepo(r.url);
+			return `${parsed.owner}/${parsed.repo}`.toLowerCase() === fullNameLower;
 		} catch {
 			return r.url.toLowerCase() === fullNameLower;
 		}
-		return false;
 	});
 }
 
