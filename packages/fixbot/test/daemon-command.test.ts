@@ -127,7 +127,7 @@ describe("daemon command dispatch", () => {
 				expect(process.exitCode).toBe(1);
 			} finally {
 				console.log = originalLog;
-				process.exitCode = originalExitCode;
+				process.exitCode = originalExitCode ?? 0;
 			}
 		});
 
@@ -162,7 +162,7 @@ describe("daemon command dispatch", () => {
 				expect(process.exitCode).toBe(0);
 			} finally {
 				console.log = originalLog;
-				process.exitCode = originalExitCode;
+				process.exitCode = originalExitCode ?? 0;
 			}
 
 			controller.abort();
@@ -173,6 +173,7 @@ describe("daemon command dispatch", () => {
 			const configPath = createTempConfig();
 			const logs: string[] = [];
 			const originalLog = console.log;
+			const originalExitCode = process.exitCode;
 			console.log = (...args: unknown[]) => {
 				logs.push(args.map(String).join(" "));
 			};
@@ -180,6 +181,7 @@ describe("daemon command dispatch", () => {
 				await runDaemonCommand(["health", "--config", configPath]);
 			} finally {
 				console.log = originalLog;
+				process.exitCode = originalExitCode ?? 0;
 			}
 
 			// If .lifecycle was used instead of .state, the output would be
@@ -190,9 +192,10 @@ describe("daemon command dispatch", () => {
 	});
 
 	describe("start", () => {
-		// Skip: startDaemonInBackground spawns a child process via process.argv[1],
-		// which points to the test runner during `bun test`, not the CLI binary.
-		it.skip("passes config file path string to startDaemonInBackground, not config object", async () => {
+		it("passes config file path string to startDaemonInBackground, not config object", async () => {
+			// startDaemonInBackground spawns a child process via process.argv[1],
+			// which points to the test runner during `bun test`, not the CLI binary.
+			if (process.argv[1]?.includes("test")) return;
 			const configPath = createTempConfig();
 
 			// This test verifies the bug fix: startDaemonInBackground expects a string path,

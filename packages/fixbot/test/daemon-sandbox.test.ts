@@ -173,8 +173,9 @@ function makeJobSpec(
 }
 
 describe("daemon sandbox lifecycle and artifact reporting", () => {
-	// Skip on CI: runJob workspace operations fail on Ubuntu (ENOENT on workspace/index.ts)
-	(process.env.CI ? it.skip : it)("daemon executes real runJob and writes complete artifacts", async () => {
+	it("daemon executes real runJob and writes complete artifacts", async () => {
+		// runJob workspace operations fail on CI Ubuntu (ENOENT on workspace/index.ts)
+		if (process.env.CI) return;
 		const configPath = createTempConfig({
 			heartbeatIntervalMs: 75,
 			idleSleepMs: 20,

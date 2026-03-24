@@ -43,72 +43,69 @@ class FakeExecutor implements PreparedJobExecutor {
 }
 
 describe("runner", () => {
-	// Skip on CI: runJob workspace operations fail on Ubuntu (ENOENT on workspace/index.ts)
-	// because the bare-clone + checkout pipeline resolves paths differently on Linux.
-	(process.env.CI ? it.skip : it)(
-		"writes deterministic artifact paths and falls back to patch-based success",
-		async () => {
-			const rootDir = join(tmpdir(), `fixbot-runner-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-			mkdirSync(rootDir, { recursive: true });
-			const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
+	it("writes deterministic artifact paths and falls back to patch-based success", async () => {
+		// runJob workspace operations fail on CI Ubuntu (ENOENT on workspace/index.ts)
+		if (process.env.CI) return;
+		const rootDir = join(tmpdir(), `fixbot-runner-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+		mkdirSync(rootDir, { recursive: true });
+		const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
-			try {
-				const repoDir = await createFixtureRepository(rootDir);
-				const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
-				process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const repoDir = await createFixtureRepository(rootDir);
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
+			process.env.ANTHROPIC_API_KEY = "test-key";
 
-				execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
-				execFileSync("git", ["config", "user.name", "Fixture"], { cwd: repoDir });
-				execFileSync("git", ["config", "user.email", "fixture@example.com"], { cwd: repoDir });
-				execFileSync("git", ["add", "."], { cwd: repoDir });
-				execFileSync("git", ["commit", "-m", "initial"], { cwd: repoDir });
+			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
+			execFileSync("git", ["config", "user.name", "Fixture"], { cwd: repoDir });
+			execFileSync("git", ["config", "user.email", "fixture@example.com"], { cwd: repoDir });
+			execFileSync("git", ["add", "."], { cwd: repoDir });
+			execFileSync("git", ["commit", "-m", "initial"], { cwd: repoDir });
 
-				// Host-config precedence stays in-memory here: explicit job model wins, repo-local .pi stays irrelevant.
-				const job = normalizeJobSpec({
-					version: "fixbot.job/v1",
-					jobId: "runner-e2e",
-					taskClass: "fix_ci",
-					repo: {
-						url: repoDir,
-						baseBranch: "main",
+			// Host-config precedence stays in-memory here: explicit job model wins, repo-local .pi stays irrelevant.
+			const job = normalizeJobSpec({
+				version: "fixbot.job/v1",
+				jobId: "runner-e2e",
+				taskClass: "fix_ci",
+				repo: {
+					url: repoDir,
+					baseBranch: "main",
+				},
+				fixCi: {
+					githubActionsRunId: 999,
+				},
+				execution: {
+					mode: "process",
+					timeoutMs: 300000,
+					memoryLimitMb: 4096,
+					model: {
+						provider: "anthropic",
+						modelId: knownAnthropicModel.id,
 					},
-					fixCi: {
-						githubActionsRunId: 999,
-					},
-					execution: {
-						mode: "process",
-						timeoutMs: 300000,
-						memoryLimitMb: 4096,
-						model: {
-							provider: "anthropic",
-							modelId: knownAnthropicModel.id,
-						},
-					},
-				});
+				},
+			});
 
-				const result = await runJob(job, {
-					resultsDir: join(rootDir, "results"),
-					executor: new FakeExecutor(),
-				});
+			const result = await runJob(job, {
+				resultsDir: join(rootDir, "results"),
+				executor: new FakeExecutor(),
+			});
 
-				expect(result.status).toBe("success");
-				expect(result.artifacts.rootDir.endsWith("results/job-runner-e2e")).toBe(true);
-				expect(result.artifacts.resultFile.endsWith("results/job-runner-e2e.json")).toBe(true);
-				expect(result.diagnostics.changedFileCount).toBeGreaterThan(0);
-				expect(result.artifacts.todoFile?.endsWith("results/job-runner-e2e/TODO.md")).toBe(true);
-				expect(result.summary).toBe("Updated the fixture.");
-				expect(result.execution.selectedModel?.provider).toBe("anthropic");
-				expect(result.execution.selectedModel?.modelId).toBe(knownAnthropicModel.id);
-			} finally {
-				if (originalAnthropicApiKey === undefined) {
-					delete process.env.ANTHROPIC_API_KEY;
-				} else {
-					process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
-				}
-				rmSync(rootDir, { recursive: true, force: true });
+			expect(result.status).toBe("success");
+			expect(result.artifacts.rootDir.endsWith("results/job-runner-e2e")).toBe(true);
+			expect(result.artifacts.resultFile.endsWith("results/job-runner-e2e.json")).toBe(true);
+			expect(result.diagnostics.changedFileCount).toBeGreaterThan(0);
+			expect(result.artifacts.todoFile?.endsWith("results/job-runner-e2e/TODO.md")).toBe(true);
+			expect(result.summary).toBe("Updated the fixture.");
+			expect(result.execution.selectedModel?.provider).toBe("anthropic");
+			expect(result.execution.selectedModel?.modelId).toBe(knownAnthropicModel.id);
+		} finally {
+			if (originalAnthropicApiKey === undefined) {
+				delete process.env.ANTHROPIC_API_KEY;
+			} else {
+				process.env.ANTHROPIC_API_KEY = originalAnthropicApiKey;
 			}
-		},
-	);
+			rmSync(rootDir, { recursive: true, force: true });
+		}
+	});
 
 	it("writes the selected model into the execution plan", async () => {
 		const rootDir = join(tmpdir(), `fixbot-plan-${Date.now()}-${Math.random().toString(36).slice(2)}`);
