@@ -211,6 +211,7 @@ export async function addressComments(options: AddressCommentsOptions): Promise<
 			} catch {
 				// ignore
 			}
+			logger?.(`[fixbot] comment-addresser: WARNING — continuing on un-rebased branch for ${entry.owner}/${entry.repo}#${entry.prNumber}; agent will run against potentially stale code`);
 		}
 
 		// 4. Write the comment context file for the agent
