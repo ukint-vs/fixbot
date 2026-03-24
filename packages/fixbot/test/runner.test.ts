@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 // getModels was removed from pi-ai; use a hardcoded fixture model for tests
 const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
+
 import { describe, expect, it } from "bun:test";
 import { normalizeJobSpec } from "../src/contracts";
 import type { PreparedJobContext, PreparedJobExecutor } from "../src/execution";

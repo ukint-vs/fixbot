@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonStatus, loadDaemonConfig } from "../src/config";
 import { normalizeJobSpec } from "../src/contracts";
@@ -73,7 +73,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -147,7 +147,7 @@ describe("daemon lifecycle", () => {
 		const firstHeartbeat = started.status.heartbeatAt;
 		const heartbeatStatus = await waitFor(
 			async () => getDaemonStatusFromConfigFile(configPath),
-			(result) => result.status.heartbeatAt !== undefined && result.status.heartbeatAt !== firstHeartbeat,
+			result => result.status.heartbeatAt !== undefined && result.status.heartbeatAt !== firstHeartbeat,
 			5_000,
 		);
 		expect(heartbeatStatus.status.heartbeatAt).not.toBe(firstHeartbeat);
@@ -312,11 +312,7 @@ describe("daemon lifecycle", () => {
 		// Wait for the daemon to process the re-queued orphan (it should appear in recentResults).
 		const status = await waitFor(
 			() => readDaemonStatusFile(config),
-			(s) =>
-				s !== undefined &&
-				s.pid === process.pid &&
-				s.state === "idle" &&
-				s.recentResults.length > 0,
+			s => s !== undefined && s.pid === process.pid && s.state === "idle" && s.recentResults.length > 0,
 			5_000,
 		);
 
@@ -325,7 +321,7 @@ describe("daemon lifecycle", () => {
 
 		// The orphan was re-queued, claimed, and processed.
 		expect(status?.recentResults[0]?.jobId).toBe("orphan-job-001");
-		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter(f => f.endsWith(".json")) : [];
 		expect(activeFiles).toEqual([]);
 	});
 
@@ -372,7 +368,7 @@ describe("daemon lifecycle", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
+			status => status !== undefined && status.pid === process.pid && status.state === "idle",
 			5_000,
 		);
 
@@ -380,10 +376,10 @@ describe("daemon lifecycle", () => {
 		await daemonRun;
 
 		// The orphan should have been cleaned up (deleted), NOT re-queued.
-		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter(f => f.endsWith(".json")) : [];
 		expect(activeFiles).toEqual([]);
 		const queueDir = join(config.paths.stateDir, "queue");
-		const queueFiles = existsSync(queueDir) ? readdirSync(queueDir).filter((f) => f.endsWith(".json")) : [];
+		const queueFiles = existsSync(queueDir) ? readdirSync(queueDir).filter(f => f.endsWith(".json")) : [];
 		expect(queueFiles).toEqual([]);
 	});
 
@@ -400,16 +396,16 @@ describe("daemon lifecycle", () => {
 			signal: controller.signal,
 			installSignalHandlers: false,
 			logger: {
-				info: (msg) => logMessages.push(msg),
-				warn: (msg) => logMessages.push(msg),
-				error: (msg) => logMessages.push(msg),
-				success: (msg) => logMessages.push(msg),
+				info: msg => logMessages.push(msg),
+				warn: msg => logMessages.push(msg),
+				error: msg => logMessages.push(msg),
+				success: msg => logMessages.push(msg),
 			},
 		});
 
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
+			status => status !== undefined && status.pid === process.pid && status.state === "idle",
 			5_000,
 		);
 
@@ -418,7 +414,7 @@ describe("daemon lifecycle", () => {
 
 		// The logger should have received at least one message (the startup state log).
 		expect(logMessages.length).toBeGreaterThan(0);
-		expect(logMessages.some((msg) => msg.includes("state="))).toBe(true);
+		expect(logMessages.some(msg => msg.includes("state="))).toBe(true);
 	});
 
 	it("reflects updated queue depth and preview immediately after enqueue without waiting for heartbeat", async () => {
@@ -439,7 +435,7 @@ describe("daemon lifecycle", () => {
 		// Wait for idle.
 		const idleStatus = await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status?.state === "idle" && status.pid === process.pid,
+			status => status?.state === "idle" && status.pid === process.pid,
 			5_000,
 		);
 		expect(idleStatus?.state).toBe("idle");
@@ -478,7 +474,7 @@ describe("daemon lifecycle", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status?.state === "idle" && status.pid === process.pid,
+			status => status?.state === "idle" && status.pid === process.pid,
 			5_000,
 		);
 
@@ -508,7 +504,7 @@ describe("daemon lifecycle", () => {
 		// Wait for the job to appear in recentResults
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(fastConfig),
-			(status) =>
+			status =>
 				status !== undefined &&
 				status.recentResults.length > 0 &&
 				status.recentResults[0]?.jobId === jobId &&
@@ -555,11 +551,7 @@ describe("daemon lifecycle", () => {
 		// Wait for the daemon to process the re-queued orphan.
 		const status = await waitFor(
 			() => readDaemonStatusFile(config),
-			(s) =>
-				s !== undefined &&
-				s.pid === process.pid &&
-				s.state === "idle" &&
-				s.recentResults.length > 0,
+			s => s !== undefined && s.pid === process.pid && s.state === "idle" && s.recentResults.length > 0,
 			5_000,
 		);
 
@@ -567,7 +559,7 @@ describe("daemon lifecycle", () => {
 		await daemonRun;
 
 		// The orphan was re-queued and processed — active dir should be clean.
-		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter((f) => f.endsWith(".json")) : [];
+		const activeFiles = existsSync(activeDir) ? readdirSync(activeDir).filter(f => f.endsWith(".json")) : [];
 		expect(activeFiles).toEqual([]);
 		expect(status?.recentResults[0]?.jobId).toBe("restart-orphan-001");
 	});
@@ -592,7 +584,7 @@ describe("daemon lifecycle", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status?.state === "idle" && status.pid === process.pid,
+			status => status?.state === "idle" && status.pid === process.pid,
 			5_000,
 		);
 
@@ -602,8 +594,7 @@ describe("daemon lifecycle", () => {
 		// Wait for the job to complete
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) =>
-				status !== undefined && status.recentResults.length > 0 && status.recentResults[0]?.jobId === jobId,
+			status => status !== undefined && status.recentResults.length > 0 && status.recentResults[0]?.jobId === jobId,
 			15_000,
 		);
 
@@ -627,7 +618,7 @@ describe("daemon lifecycle", () => {
 
 		await waitFor(
 			() => readDaemonStatusFile(config),
-			(status) => status?.state === "idle" && status.pid === process.pid,
+			status => status?.state === "idle" && status.pid === process.pid,
 			5_000,
 		);
 

@@ -2,8 +2,10 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+
 // getModels was removed from pi-ai; use a hardcoded fixture model for tests
 const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
+
 import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonJobEnvelope } from "../src/daemon/enqueue";
@@ -74,7 +76,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -99,7 +101,7 @@ async function startForegroundDaemon(
 
 	const readyStatus = await waitFor(
 		() => readDaemonStatusFile(config),
-		(status) => status?.state === "idle" && status.pid === process.pid,
+		status => status?.state === "idle" && status.pid === process.pid,
 		5_000,
 	);
 	expect(readyStatus?.state).toBe("idle");
@@ -206,8 +208,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 
 			const completedStatus = await waitFor(
 				() => readDaemonStatusFile(daemon.config),
-				(status) =>
-					status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+				status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 				15_000,
 			);
 
@@ -273,8 +274,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 
 			const completedStatus = await waitFor(
 				() => readDaemonStatusFile(daemon.config),
-				(status) =>
-					status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+				status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 				15_000,
 			);
 
@@ -340,8 +340,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 
 			const completedStatus = await waitFor(
 				() => readDaemonStatusFile(daemon.config),
-				(status) =>
-					status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
+				status => status?.state === "idle" && status.activeJob === null && status.recentResults[0]?.jobId === jobId,
 				15_000,
 			);
 

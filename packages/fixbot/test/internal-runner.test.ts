@@ -1,15 +1,16 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
 // getModels was removed from pi-ai; use a hardcoded fixture model for tests
 const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
+
+import { describe, expect, it } from "bun:test";
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
-import { afterEach, describe, expect, it } from "bun:test";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
 import {
 	buildGitFixPrompt,
 	buildInjectedContext,
-
 	resolveSkillPath,
 	runInternalExecutionFromPlan,
 	type SessionDriver,
@@ -144,9 +145,13 @@ describe("internal runner", () => {
 		// Clear all env vars that getEnvApiKey() would pick up so the in-memory
 		// auth storage actually has no available models regardless of the host env.
 		const envKeys = [
-			"GITHUB_TOKEN", "GH_TOKEN", "COPILOT_GITHUB_TOKEN",
-			"ANTHROPIC_API_KEY", "ANTHROPIC_OAUTH_TOKEN",
-			"OPENAI_API_KEY", "GOOGLE_CLOUD_API_KEY",
+			"GITHUB_TOKEN",
+			"GH_TOKEN",
+			"COPILOT_GITHUB_TOKEN",
+			"ANTHROPIC_API_KEY",
+			"ANTHROPIC_OAUTH_TOKEN",
+			"OPENAI_API_KEY",
+			"GOOGLE_CLOUD_API_KEY",
 		] as const;
 		const savedEnv = Object.fromEntries(envKeys.map(k => [k, process.env[k]]));
 		for (const k of envKeys) process.env[k] = "";
