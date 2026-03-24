@@ -450,9 +450,6 @@ export async function pollGitHubRepos(
 		if (botUser) {
 			const assignedIssues = await fetchAssignedIssues(owner, repo, botUser, githubConfig.token, logger);
 
-			// Build a set of currently-assigned issue numbers for unassignment detection
-			const assignedIssueNumbers = new Set(assignedIssues.map((i) => i.number));
-
 			for (const issue of assignedIssues) {
 				const trigger = `assign:${botUser}`;
 
@@ -513,26 +510,6 @@ export async function pollGitHubRepos(
 				if (githubConfig.token) {
 					await postAckComment(owner, repo, issue.number, jobSpec.jobId, githubConfig.token, logger);
 				}
-			}
-
-			// ---------------------------------------------------------------
-			// 2b. Unassignment cancellation
-			// ---------------------------------------------------------------
-			// If cancelFn is provided, look for previously acked assignment
-			// issues where the bot is no longer assigned and cancel them.
-			// This is a best-effort check — we don't persist assignment state
-			// across restarts, so we only cancel jobs that still have an ack
-			// comment but the bot is no longer assigned.
-			if (cancelFn && githubConfig.token) {
-				// We can't enumerate all previously-assigned issues without
-				// state, but we CAN check queued jobs with kind=github-assignment
-				// for this repo.  The cancelFn callback tells us whether the
-				// jobId was found and removed from the queue.
-				//
-				// For now, unassignment detection is handled at the webhook
-				// layer (#19).  The poller-based approach here is a placeholder
-				// that will be expanded when we add persistent assignment state.
-				void assignedIssueNumbers; // used above; suppress lint
 			}
 		}
 	}
