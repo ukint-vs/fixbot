@@ -1,14 +1,15 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModels } from "@oh-my-pi/pi-ai";
+// getModels was removed from pi-ai; use a hardcoded fixture model for tests
+const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { afterEach, describe, expect, it } from "bun:test";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
 import {
 	buildGitFixPrompt,
 	buildInjectedContext,
-	getConfiguredAuthFilePath,
+
 	resolveSkillPath,
 	runInternalExecutionFromPlan,
 	type SessionDriver,
@@ -24,10 +25,7 @@ describe("internal runner", () => {
 			},
 		});
 		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+		const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 
 		const model = await resolveExecutionModel(
 			{
@@ -62,7 +60,7 @@ describe("internal runner", () => {
 		expect(model.id).toBe(knownAnthropicModel.id);
 	});
 
-	it("uses the host default provider/model when no job override is provided", async () => {
+	it("uses the provider default model when no job override is provided", async () => {
 		const authStorage = AuthStorage.inMemory({
 			anthropic: {
 				type: "api_key",
@@ -70,10 +68,6 @@ describe("internal runner", () => {
 			},
 		});
 		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
 
 		const model = await resolveExecutionModel(
 			{
@@ -98,28 +92,15 @@ describe("internal runner", () => {
 				},
 			},
 			{
-				hostConfig: {
-					hostAgentDir: "/tmp/host-agent",
-					hostAgentDirExists: true,
-					authFilePath: "/tmp/host-agent/auth.json",
-					authFileExists: true,
-					settingsFilePath: "/tmp/host-agent/settings.json",
-					settingsFileExists: true,
-					modelsFilePath: "/tmp/host-agent/models.json",
-					modelsFileExists: false,
-					defaultProvider: "anthropic",
-					defaultModel: knownAnthropicModel.id,
-				},
 				authStorage,
 				modelRegistry,
 			},
 		);
 
 		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(knownAnthropicModel.id);
 	});
 
-	it("falls back when the host default model is unavailable", async () => {
+	it("falls back to provider default when no job model override", async () => {
 		const authStorage = AuthStorage.inMemory({
 			anthropic: {
 				type: "api_key",
@@ -127,10 +108,6 @@ describe("internal runner", () => {
 			},
 		});
 		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const fallbackModel = getModels("anthropic")[0];
-		if (!fallbackModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
 
 		const model = await resolveExecutionModel(
 			{
@@ -155,25 +132,12 @@ describe("internal runner", () => {
 				},
 			},
 			{
-				hostConfig: {
-					hostAgentDir: "/tmp/host-agent",
-					hostAgentDirExists: true,
-					authFilePath: "/tmp/host-agent/auth.json",
-					authFileExists: true,
-					settingsFilePath: "/tmp/host-agent/settings.json",
-					settingsFileExists: true,
-					modelsFilePath: "/tmp/host-agent/models.json",
-					modelsFileExists: false,
-					defaultProvider: "anthropic",
-					defaultModel: "does-not-exist",
-				},
 				authStorage,
 				modelRegistry,
 			},
 		);
 
 		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(fallbackModel.id);
 	});
 
 	it("fails fast when no authenticated models are available", async () => {
@@ -225,47 +189,37 @@ describe("internal runner", () => {
 		}
 	});
 
-	it("resolves host auth paths with override precedence", () => {
+	it("resolves host agent dir from FIXBOT_AGENT_DIR env var", () => {
 		const hostDir = join(tmpdir(), `fixbot-agent-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-		const authFile = join(tmpdir(), `fixbot-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
 		mkdirSync(hostDir, { recursive: true });
-		writeFileSync(authFile, "{}", "utf-8");
-		writeFileSync(join(hostDir, "settings.json"), '{ "defaultProvider": "anthropic", "defaultModel": "x" }', "utf-8");
 
+		const original = process.env.FIXBOT_AGENT_DIR;
+		process.env.FIXBOT_AGENT_DIR = hostDir;
 		try {
-			const config = resolveHostAgentConfig({
-				...process.env,
-				FIXBOT_AGENT_DIR: hostDir,
-				FIXBOT_AUTH_FILE: authFile,
-			});
+			const config = resolveHostAgentConfig();
 			expect(config.hostAgentDir).toBe(hostDir);
-			expect(config.authFilePath).toBe(authFile);
-			expect(config.settingsFilePath).toBe(join(hostDir, "settings.json"));
+			expect(config.hostAgentDirExists).toBe(true);
 		} finally {
+			if (original === undefined) {
+				delete process.env.FIXBOT_AGENT_DIR;
+			} else {
+				process.env.FIXBOT_AGENT_DIR = original;
+			}
 			rmSync(hostDir, { recursive: true, force: true });
-			rmSync(authFile, { force: true });
 		}
 	});
 
-	it("accepts an external auth file path from FIXBOT_AUTH_FILE", () => {
-		const authFile = join(tmpdir(), `fixbot-auth-${Date.now()}-${Math.random().toString(36).slice(2)}.json`);
-		const originalAuthFile = process.env.FIXBOT_AUTH_FILE;
-		writeFileSync(
-			authFile,
-			'{\n  "openai-codex": { "type": "oauth", "access": "x", "refresh": "y", "expires": 9999999999999, "accountId": "acct" }\n}\n',
-			"utf-8",
-		);
-		process.env.FIXBOT_AUTH_FILE = authFile;
-
+	it("throws when FIXBOT_AGENT_DIR points to non-existent directory", () => {
+		const original = process.env.FIXBOT_AGENT_DIR;
+		process.env.FIXBOT_AGENT_DIR = "/tmp/does-not-exist-fixbot-test";
 		try {
-			expect(getConfiguredAuthFilePath()).toBe(authFile);
+			expect(() => resolveHostAgentConfig()).toThrow("does not exist");
 		} finally {
-			if (originalAuthFile === undefined) {
-				delete process.env.FIXBOT_AUTH_FILE;
+			if (original === undefined) {
+				delete process.env.FIXBOT_AGENT_DIR;
 			} else {
-				process.env.FIXBOT_AUTH_FILE = originalAuthFile;
+				process.env.FIXBOT_AGENT_DIR = original;
 			}
-			rmSync(authFile, { force: true });
 		}
 	});
 

@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { getModels } from "@oh-my-pi/pi-ai";
+// getModels was removed from pi-ai; use a hardcoded fixture model for tests
+const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
 import { describe, expect, it } from "bun:test";
 import { normalizeJobSpec } from "../src/contracts";
 import type { PreparedJobContext, PreparedJobExecutor } from "../src/execution";
@@ -47,10 +48,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -112,10 +110,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -183,10 +178,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 			process.env.GITHUB_TOKEN = "gh-token";
 
@@ -261,10 +253,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 			process.env.GITHUB_TOKEN = "gh-token";
 
@@ -337,10 +326,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -391,10 +377,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -442,10 +425,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });
@@ -496,10 +476,7 @@ describe("runner", () => {
 
 		try {
 			const repoDir = await createFixtureRepository(rootDir);
-			const knownAnthropicModel = getModels("anthropic")[0];
-			if (!knownAnthropicModel) {
-				throw new Error("Expected at least one anthropic model in the registry");
-			}
+			const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 			process.env.ANTHROPIC_API_KEY = "test-key";
 
 			execFileSync("git", ["init", "-b", "main"], { cwd: repoDir });

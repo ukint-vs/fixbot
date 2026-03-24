@@ -125,7 +125,7 @@ describe("buildGitHubJobSpec", () => {
 		expect(spec.repo.baseBranch).toBe("main");
 		expect(spec.fixCi!.githubActionsRunId).toBe(12345);
 		expect(spec.execution.mode).toBe("process");
-		expect(spec.execution.timeoutMs).toBe(600_000);
+		expect(spec.execution.timeoutMs).toBe(1_800_000);
 		expect(spec.execution.memoryLimitMb).toBe(4096);
 		expect(spec.jobId).toMatch(/^gh-[a-f0-9]{16}$/);
 	});

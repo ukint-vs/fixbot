@@ -2,7 +2,8 @@ import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
-import { getModels } from "@oh-my-pi/pi-ai";
+// getModels was removed from pi-ai; use a hardcoded fixture model for tests
+const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
 import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonJobEnvelope } from "../src/daemon/enqueue";
@@ -178,10 +179,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 		const rootDir = dirname(configPath);
 		const repoDir = await createFixtureRepository(rootDir);
 
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+		const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 
 		const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -248,10 +246,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 		const rootDir = dirname(configPath);
 		const repoDir = await createFixtureRepository(rootDir);
 
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+		const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 
 		const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -311,10 +306,7 @@ describe("daemon sandbox lifecycle and artifact reporting", () => {
 		const rootDir = dirname(configPath);
 		const repoDir = await createFixtureRepository(rootDir);
 
-		const knownAnthropicModel = getModels("anthropic")[0];
-		if (!knownAnthropicModel) {
-			throw new Error("Expected at least one anthropic model in the registry");
-		}
+		const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
 
 		const originalAnthropicApiKey = process.env.ANTHROPIC_API_KEY;
 		const originalGhToken = process.env.GH_TOKEN;
