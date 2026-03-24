@@ -139,6 +139,8 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	const executor = options.executor ?? createDefaultPreparedJobExecutor();
 	const dockerImageVerifier = options.dockerImageVerifier ?? (() => assertDockerImageReady());
 	const paths = getArtifactPaths(resultsDir, job.jobId);
+	/** Mutable workspace directory — may be overridden by repo-cache worktree. */
+	let workspaceDir = paths.workspaceDir;
 
 	log.info(`starting job ${job.jobId} (${job.execution.mode})`);
 	log.info(`results will be written under ${paths.artifactDir}`);
@@ -180,10 +182,10 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 					config: cacheConfig,
 					logger: (msg) => log.info(msg),
 				});
-				// Override the workspace dir to the worktree location.
-				(paths as { workspaceDir: string }).workspaceDir = cacheResult.workspaceDir;
+				// Use the worktree location instead of the default workspace dir.
+				workspaceDir = cacheResult.workspaceDir;
 				log.info(
-					`repo-cache: workspace ready at ${cacheResult.workspaceDir} (fromCache=${cacheResult.fromCache})`,
+					`repo-cache: workspace ready at ${workspaceDir} (fromCache=${cacheResult.fromCache})`,
 				);
 			} catch (cacheError) {
 				log.warn(
@@ -195,17 +197,17 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 
 		if (!cacheResult) {
 			log.info(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
-			await cloneRepository(job.repo.url, job.repo.baseBranch, paths.workspaceDir);
+			await cloneRepository(job.repo.url, job.repo.baseBranch, workspaceDir);
 		}
 
-		await configureLocalGitIdentity(paths.workspaceDir);
-		baseCommit = await getHeadCommit(paths.workspaceDir);
+		await configureLocalGitIdentity(workspaceDir);
+		baseCommit = await getHeadCommit(workspaceDir);
 		log.info(`repository ready at ${baseCommit}`);
 		writeJson(paths.executionPlanFile, buildExecutionPlan(job, baseCommit, selectedModel));
 
 		const context: PreparedJobContext = {
 			job,
-			paths,
+			paths: { ...paths, workspaceDir },
 			baseCommit,
 			hostConfig,
 			selectedModel,
@@ -218,30 +220,30 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 		executionError = error instanceof Error ? error.message : String(error);
 		log.error(`execution failed: ${executionError}`);
 	} finally {
-		if (existsSync(paths.workspaceDir)) {
+		if (existsSync(workspaceDir)) {
 			log.info("capturing workspace artifacts");
 			try {
-				headCommit = await getHeadCommit(paths.workspaceDir);
+				headCommit = await getHeadCommit(workspaceDir);
 			} catch {
 				headCommit = undefined;
 			}
 
 			try {
-				patchText = baseCommit ? await capturePatch(paths.workspaceDir, baseCommit, paths.patchFile) : "";
+				patchText = baseCommit ? await capturePatch(workspaceDir, baseCommit, paths.patchFile) : "";
 			} catch {
 				patchText = safeReadFile(paths.patchFile);
 			}
 
 			try {
-				gitStatusText = await captureGitStatus(paths.workspaceDir, paths.gitStatusFile);
+				gitStatusText = await captureGitStatus(workspaceDir, paths.gitStatusFile);
 			} catch {
 				gitStatusText = safeReadFile(paths.gitStatusFile);
 			}
 
-			copyOptionalWorkspaceArtifact(paths.workspaceDir, "TODO.md", paths.todoFile);
-			copyOptionalWorkspaceArtifact(paths.workspaceDir, "ci-log.txt", paths.ciLogFile);
+			copyOptionalWorkspaceArtifact(workspaceDir, "TODO.md", paths.todoFile);
+			copyOptionalWorkspaceArtifact(workspaceDir, "ci-log.txt", paths.ciLogFile);
 			if (!existsSync(paths.ciLogFile)) {
-				copyOptionalWorkspaceArtifact(paths.workspaceDir, ".fixbot/ci-log.txt", paths.ciLogFile);
+				copyOptionalWorkspaceArtifact(workspaceDir, ".fixbot/ci-log.txt", paths.ciLogFile);
 			}
 		}
 	}
@@ -281,7 +283,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 	// The agent typically commits its work, so `git status --short` shows a clean tree
 	// while the actual diff vs baseCommit has real changes.
 	const uncommittedCount = countChangedFilesFromStatus(gitStatusText);
-	const committedCount = baseCommit ? await countCommittedChangedFiles(paths.workspaceDir, baseCommit) : 0;
+	const committedCount = baseCommit ? await countCommittedChangedFiles(workspaceDir, baseCommit) : 0;
 	const changedFileCount = Math.max(uncommittedCount, committedCount);
 	const result: JobResultV1 = {
 		version: JOB_RESULT_VERSION_V1,
@@ -303,7 +305,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 			sandbox: job.execution.sandbox,
 			model: job.execution.model,
 			selectedModel: executionOutput?.model ?? selectedModel,
-			workspaceDir: paths.workspaceDir,
+			workspaceDir,
 			baseCommit,
 			headCommit,
 			startedAt: startedAt.toISOString(),

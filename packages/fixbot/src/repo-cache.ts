@@ -324,7 +324,7 @@ export function getCacheStats(config: RepoCacheConfig): RepoCacheStats {
 function estimateDiskUsageMb(dir: string): number {
 	let totalBytes = 0;
 
-	function walkShallow(d: string): void {
+	function walkRecursive(d: string): void {
 		if (!existsSync(d)) return;
 		try {
 			for (const entry of readdirSync(d, { withFileTypes: true })) {
@@ -336,7 +336,7 @@ function estimateDiskUsageMb(dir: string): number {
 						// skip
 					}
 				} else if (entry.isDirectory()) {
-					walkShallow(full);
+					walkRecursive(full);
 				}
 			}
 		} catch {
@@ -344,6 +344,6 @@ function estimateDiskUsageMb(dir: string): number {
 		}
 	}
 
-	walkShallow(dir);
+	walkRecursive(dir);
 	return Math.round(totalBytes / (1024 * 1024));
 }
