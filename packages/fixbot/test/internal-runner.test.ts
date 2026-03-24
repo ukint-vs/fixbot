@@ -505,6 +505,66 @@ describe("internal runner", () => {
 		expect(ctx).not.toContain("GitHub Actions Run ID");
 	});
 
+	it("buildInjectedContext includes Excluded Paths section when repoExcludePaths provided", () => {
+		const job: NormalizedJobSpecV1 = {
+			version: "fixbot.job/v1",
+			jobId: "exclude-ctx-1",
+			taskClass: "fix_lint",
+			repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+			fixLint: { lintCommand: "eslint ." },
+			execution: {
+				mode: "process",
+				timeoutMs: 300000,
+				memoryLimitMb: 4096,
+				sandbox: { mode: "workspace-write", networkAccess: true },
+			},
+		};
+		const ctx = buildInjectedContext(job, { provider: "anthropic", modelId: "claude-sonnet-4-5" }, [
+			"vendor/**",
+			"dist/**",
+		]);
+		expect(ctx).toContain("## Excluded Paths");
+		expect(ctx).toContain("Do not read or modify files matching these patterns:");
+		expect(ctx).toContain("- `vendor/**`");
+		expect(ctx).toContain("- `dist/**`");
+	});
+
+	it("buildInjectedContext omits Excluded Paths section when repoExcludePaths is empty", () => {
+		const job: NormalizedJobSpecV1 = {
+			version: "fixbot.job/v1",
+			jobId: "exclude-ctx-2",
+			taskClass: "fix_lint",
+			repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+			fixLint: { lintCommand: "eslint ." },
+			execution: {
+				mode: "process",
+				timeoutMs: 300000,
+				memoryLimitMb: 4096,
+				sandbox: { mode: "workspace-write", networkAccess: true },
+			},
+		};
+		const ctx = buildInjectedContext(job, { provider: "anthropic", modelId: "claude-sonnet-4-5" }, []);
+		expect(ctx).not.toContain("## Excluded Paths");
+	});
+
+	it("buildInjectedContext omits Excluded Paths section when repoExcludePaths is undefined", () => {
+		const job: NormalizedJobSpecV1 = {
+			version: "fixbot.job/v1",
+			jobId: "exclude-ctx-3",
+			taskClass: "fix_lint",
+			repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+			fixLint: { lintCommand: "eslint ." },
+			execution: {
+				mode: "process",
+				timeoutMs: 300000,
+				memoryLimitMb: 4096,
+				sandbox: { mode: "workspace-write", networkAccess: true },
+			},
+		};
+		const ctx = buildInjectedContext(job, { provider: "anthropic", modelId: "claude-sonnet-4-5" });
+		expect(ctx).not.toContain("## Excluded Paths");
+	});
+
 	it("mock session driver receives correct prompt for fix_lint plan", async () => {
 		const artifactDir = join(tmpdir(), `fixbot-lint-${Date.now()}-${Math.random().toString(36).slice(2)}`);
 		mkdirSync(join(artifactDir, "workspace"), { recursive: true });

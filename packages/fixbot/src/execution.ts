@@ -11,6 +11,7 @@ export interface PreparedJobContext {
 	baseCommit: string;
 	hostConfig: HostAgentConfig;
 	selectedModel: ModelSelection;
+	repoExcludePaths?: string[];
 }
 
 export interface PreparedJobExecutor {

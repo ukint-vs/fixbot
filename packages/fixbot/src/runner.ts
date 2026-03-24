@@ -23,6 +23,7 @@ import { resolveExecutionModel, resolveHostAgentConfig } from "./host-agent";
 import { assertDockerImageReady } from "./image";
 import { createStderrLogger, type Logger } from "./logger";
 import { deriveResultStatus, parseResultMarkers } from "./markers";
+import { loadRepoConfig, mergeConfigs } from "./repo-config";
 import {
 	EXECUTION_PLAN_VERSION_V1,
 	type ExecutionOutputV1,
@@ -69,13 +70,18 @@ function buildExecutionPlan(
 	job: NormalizedJobSpecV1,
 	baseCommit: string,
 	selectedModel: ModelSelection,
+	repoExcludePaths?: string[],
 ): ExecutionPlanV1 {
-	return {
+	const plan: ExecutionPlanV1 = {
 		version: EXECUTION_PLAN_VERSION_V1,
 		job,
 		baseCommit,
 		selectedModel,
 	};
+	if (repoExcludePaths && repoExcludePaths.length > 0) {
+		plan.repoExcludePaths = repoExcludePaths;
+	}
+	return plan;
 }
 
 /** Format milliseconds as a human-readable duration, e.g. "2m 18s" or "45s". */
@@ -152,22 +158,30 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 
 	try {
 		const hostConfig = resolveHostAgentConfig();
-		const resolvedModel = await resolveExecutionModel(job, { configModel: options.configModel });
-		selectedModel = {
-			provider: resolvedModel.provider,
-			modelId: resolvedModel.id,
-		};
-		log.info(`preflight selected model ${resolvedModel.provider}/${resolvedModel.id}`);
 		if (job.execution.mode === "docker") {
 			assertDockerGithubAuth();
 			await dockerImageVerifier();
 		}
+
 		log.info(`cloning ${job.repo.url} @ ${job.repo.baseBranch}`);
 		await cloneRepository(job.repo.url, job.repo.baseBranch, paths.workspaceDir);
 		await configureLocalGitIdentity(paths.workspaceDir);
 		baseCommit = await getHeadCommit(paths.workspaceDir);
-		log.info(`repository cloned at ${baseCommit}`);
-		writeJson(paths.executionPlanFile, buildExecutionPlan(job, baseCommit, selectedModel));
+		log.info(`repository ready at ${baseCommit}`);
+
+		// Load per-repo .fixbot/config.yml and merge with daemon config
+		const { config: repoConfig } = loadRepoConfig(paths.workspaceDir, log);
+		const merged = mergeConfigs(repoConfig, options.configModel, log);
+
+		const resolvedModel = await resolveExecutionModel(job, {
+			configModel: merged.model,
+		});
+		selectedModel = {
+			provider: resolvedModel.provider,
+			modelId: resolvedModel.id,
+		};
+		log.info(`selected model ${resolvedModel.provider}/${resolvedModel.id} (source: ${merged.modelSource ?? "default"})`);
+		writeJson(paths.executionPlanFile, buildExecutionPlan(job, baseCommit, selectedModel, merged.excludePaths));
 
 		const context: PreparedJobContext = {
 			job,
@@ -175,6 +189,7 @@ export async function runJob(job: NormalizedJobSpecV1, options: RunJobOptions = 
 			baseCommit,
 			hostConfig,
 			selectedModel,
+			repoExcludePaths: merged.excludePaths,
 		};
 		log.info("agent running");
 		executionOutput = await executor.execute(context);
