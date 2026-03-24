@@ -5,6 +5,7 @@ import { join } from "node:path";
 // getModels was removed from pi-ai; use a hardcoded fixture model for tests
 const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
 
+import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
 import { describe, expect, it } from "bun:test";
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
@@ -99,6 +100,7 @@ describe("internal runner", () => {
 		);
 
 		expect(model.provider).toBe("anthropic");
+		expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
 	});
 
 	it("falls back to provider default when no job model override", async () => {
@@ -139,6 +141,7 @@ describe("internal runner", () => {
 		);
 
 		expect(model.provider).toBe("anthropic");
+		expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
 	});
 
 	it("fails fast when no authenticated models are available", async () => {
