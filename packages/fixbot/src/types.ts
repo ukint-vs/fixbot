@@ -15,7 +15,7 @@ export type ExecutionMode = "process" | "docker";
 export type SandboxMode = "workspace-write" | "read-only";
 export type DaemonLifecycleState = (typeof DAEMON_LIFECYCLE_STATES)[number];
 export type DaemonStatusFormat = "json";
-export type DaemonSubmissionKind = "cli" | "github-label";
+export type DaemonSubmissionKind = "cli" | "github-label" | "github-assignment";
 
 export interface RepoTarget {
 	url: string;
@@ -245,6 +245,8 @@ export interface DaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** GPG key ID (fingerprint or email) used for signing commits. When omitted, signing is attempted only if git's global user.signingKey is set. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. When set, issues assigned to this user trigger solve_issue jobs. */
+	botUsername?: string;
 }
 
 export interface NormalizedDaemonGitHubRepoConfig {
@@ -261,6 +263,8 @@ export interface NormalizedDaemonGitHubConfig {
 	appAuth?: GitHubAppAuthConfig;
 	/** Normalized from DaemonGitHubConfig.gpgKeyId. */
 	gpgKeyId?: string;
+	/** GitHub username of the bot account. When set, issues assigned to this user trigger solve_issue jobs. */
+	botUsername?: string;
 }
 
 export interface DaemonConfigV1 {

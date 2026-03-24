@@ -376,9 +376,9 @@ export async function reportJobResult(
 	config: NormalizedDaemonConfigV1,
 	logger?: (message: string) => void,
 ): Promise<void> {
-	// Guard: only github-label submissions
-	if (envelope.submission.kind !== "github-label") {
-		logger?.("[fixbot] github-report: skipping — not github-label");
+	// Guard: only GitHub-triggered submissions
+	if (envelope.submission.kind !== "github-label" && envelope.submission.kind !== "github-assignment") {
+		logger?.("[fixbot] github-report: skipping — not a GitHub submission");
 		return;
 	}
 

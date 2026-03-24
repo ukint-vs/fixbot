@@ -519,7 +519,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 	const defaultGitHubPoller: GitHubPollerFn | undefined = config.github
 		? async (cfg) => {
 				if (!cfg.github) {
-					return { enqueued: [], skipped: 0, errors: 0 };
+					return { enqueued: [], skipped: 0, errors: 0, cancelled: 0 };
 				}
 				return pollGitHubRepos(
 					cfg.github,

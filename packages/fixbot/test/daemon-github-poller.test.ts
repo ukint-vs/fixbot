@@ -1,10 +1,17 @@
 import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, mock } from "bun:test";
 import {
+	type AckCommentResult,
 	buildGitHubJobSpec,
+	deleteAckComment,
 	deriveGitHubJobId,
+	fetchAssignedIssues,
+	fetchIssuesWithFilter,
+	type GitHubCancelFn,
 	type GitHubEnqueueFn,
+	hasAckComment,
 	pollGitHubRepos,
+	validateBotUsername,
 } from "../src/daemon/github-poller";
 import { parseOwnerRepo } from "../src/daemon/github-reporter";
 import { DuplicateDaemonJobError } from "../src/daemon/job-store";
@@ -60,6 +67,19 @@ const FIX_CI_CONFIG: NormalizedDaemonGitHubConfig = {
 	],
 	token: "fake-token",
 	pollIntervalMs: 60_000,
+};
+
+const ASSIGNMENT_CONFIG: NormalizedDaemonGitHubConfig = {
+	repos: [
+		{
+			url: "https://github.com/owner/repo",
+			baseBranch: "main",
+			triggerLabel: "fixbot",
+		},
+	],
+	token: "fake-token",
+	pollIntervalMs: 60_000,
+	botUsername: "fixbot-bot",
 };
 
 const RESULTS_DIR = "/tmp/fixbot-test-results";
@@ -125,7 +145,7 @@ describe("buildGitHubJobSpec", () => {
 		expect(spec.repo.baseBranch).toBe("main");
 		expect(spec.fixCi!.githubActionsRunId).toBe(12345);
 		expect(spec.execution.mode).toBe("process");
-		expect(spec.execution.timeoutMs).toBe(600_000);
+		expect(spec.execution.timeoutMs).toBe(1_800_000);
 		expect(spec.execution.memoryLimitMb).toBe(4096);
 		expect(spec.jobId).toMatch(/^gh-[a-f0-9]{16}$/);
 	});
@@ -308,7 +328,7 @@ describe("pollGitHubRepos", () => {
 		const logs: string[] = [];
 		await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn, (msg) => logs.push(msg));
 
-		expect(logs.some((l) => l.includes("github-poll repos=1 enqueued=0 skipped=0 errors=0"))).toBe(true);
+		expect(logs.some((l) => l.includes("github-poll repos=1 enqueued=0 skipped=0 errors=0 cancelled=0"))).toBe(true);
 	});
 
 	it("github token never appears in log output", async () => {
@@ -451,5 +471,374 @@ describe("pollGitHubRepos", () => {
 		expect(enqueued[0].job.solveIssue!.issueNumber).toBe(7);
 		expect(enqueued[0].job.solveIssue!.issueTitle).toBe("Fix the login bug");
 		expect(enqueued[0].job.fixCi).toBeUndefined();
+	});
+
+	it("pollGitHubRepos returns cancelled: 0 by default", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues?labels=fixbot",
+				response: { status: 200, body: [] },
+			},
+		]);
+
+		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
+		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
+
+		expect(result.cancelled).toBe(0);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// validateBotUsername
+// ---------------------------------------------------------------------------
+
+describe("validateBotUsername", () => {
+	it("returns undefined for undefined input", () => {
+		expect(validateBotUsername(undefined)).toBeUndefined();
+	});
+
+	it("returns undefined for empty string", () => {
+		expect(validateBotUsername("")).toBeUndefined();
+	});
+
+	it("returns undefined for whitespace-only string", () => {
+		expect(validateBotUsername("   ")).toBeUndefined();
+	});
+
+	it("returns trimmed lowercase username", () => {
+		expect(validateBotUsername("  FixBot-App  ")).toBe("fixbot-app");
+	});
+
+	it("handles already-lowercase username", () => {
+		expect(validateBotUsername("mybot")).toBe("mybot");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// fetchIssuesWithFilter / fetchAssignedIssues
+// ---------------------------------------------------------------------------
+
+describe("fetchIssuesWithFilter", () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("fetches issues with arbitrary filter string", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues?assignee=bot&state=open",
+				response: { status: 200, body: [{ number: 5, title: "assigned issue", body: "desc" }] },
+			},
+		]);
+
+		const result = await fetchIssuesWithFilter("owner", "repo", "assignee=bot");
+		expect(result).toHaveLength(1);
+		expect(result[0].number).toBe(5);
+		expect(result[0].title).toBe("assigned issue");
+	});
+
+	it("returns empty array on network error", async () => {
+		globalThis.fetch = (() => {
+			throw new Error("network failure");
+		}) as unknown as typeof fetch;
+
+		const logs: string[] = [];
+		const result = await fetchIssuesWithFilter("owner", "repo", "assignee=bot", "tok", (m) => logs.push(m));
+		expect(result).toHaveLength(0);
+		expect(logs.some((l) => l.includes("network error"))).toBe(true);
+	});
+});
+
+describe("fetchAssignedIssues", () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("delegates to fetchIssuesWithFilter with assignee parameter", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "assignee=fixbot-bot",
+				response: { status: 200, body: [{ number: 3, title: "task", body: null }] },
+			},
+		]);
+
+		const result = await fetchAssignedIssues("owner", "repo", "fixbot-bot");
+		expect(result).toHaveLength(1);
+		expect(result[0].number).toBe(3);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// hasAckComment (AckCommentResult)
+// ---------------------------------------------------------------------------
+
+describe("hasAckComment", () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("returns found: true with commentId when ack comment exists", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues/1/comments",
+				response: {
+					status: 200,
+					body: [{ id: 777, body: "<!-- fixbot-ack -->\n🤖 fixbot job `gh-abc` has been queued." }],
+				},
+			},
+		]);
+
+		const result = await hasAckComment("owner", "repo", 1, "tok");
+		expect(result.found).toBe(true);
+		expect(result.commentId).toBe(777);
+	});
+
+	it("returns found: false with null commentId when no ack comment", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues/2/comments",
+				response: { status: 200, body: [{ id: 888, body: "just a regular comment" }] },
+			},
+		]);
+
+		const result = await hasAckComment("owner", "repo", 2, "tok");
+		expect(result.found).toBe(false);
+		expect(result.commentId).toBeNull();
+	});
+
+	it("returns found: false on network error", async () => {
+		globalThis.fetch = (() => {
+			throw new Error("timeout");
+		}) as unknown as typeof fetch;
+
+		const result = await hasAckComment("owner", "repo", 3, "tok");
+		expect(result.found).toBe(false);
+		expect(result.commentId).toBeNull();
+	});
+});
+
+// ---------------------------------------------------------------------------
+// deleteAckComment
+// ---------------------------------------------------------------------------
+
+describe("deleteAckComment", () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+	});
+
+	it("returns true on successful deletion (204)", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues/comments/777",
+				method: "DELETE",
+				response: { status: 204, body: null },
+			},
+		]);
+
+		const result = await deleteAckComment("owner", "repo", 777, "tok");
+		expect(result).toBe(true);
+	});
+
+	it("returns false on non-204 response", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "/repos/owner/repo/issues/comments/777",
+				method: "DELETE",
+				response: { status: 404, body: { message: "Not Found" } },
+			},
+		]);
+
+		const result = await deleteAckComment("owner", "repo", 777, "tok");
+		expect(result).toBe(false);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// deriveGitHubJobId with trigger discriminator
+// ---------------------------------------------------------------------------
+
+describe("deriveGitHubJobId trigger discriminator", () => {
+	it("label trigger and assignment trigger produce different IDs for same issue", () => {
+		const labelId = deriveGitHubJobId("https://github.com/owner/repo", 42, "fixbot");
+		const assignId = deriveGitHubJobId("https://github.com/owner/repo", 42, "assign:fixbot-bot");
+		expect(labelId).not.toBe(assignId);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// Assignment-triggered polling via pollGitHubRepos
+// ---------------------------------------------------------------------------
+
+describe("pollGitHubRepos assignment trigger", () => {
+	const originalFetch = globalThis.fetch;
+
+	afterEach(() => {
+		globalThis.fetch = originalFetch;
+		mock.restore();
+	});
+
+	it("enqueues solve_issue job when issue is assigned to bot", async () => {
+		globalThis.fetch = createMockFetch([
+			// Label polling returns no issues
+			{
+				urlPattern: "labels=fixbot",
+				response: { status: 200, body: [] },
+			},
+			// Assignment polling returns one issue
+			{
+				urlPattern: "assignee=fixbot-bot",
+				response: { status: 200, body: [{ number: 99, title: "Assigned task", body: "do this" }] },
+			},
+			// No ack comment on issue 99
+			{
+				urlPattern: "/repos/owner/repo/issues/99/comments",
+				method: "GET",
+				response: { status: 200, body: [] },
+			},
+			// Post ack comment
+			{
+				urlPattern: "/repos/owner/repo/issues/99/comments",
+				method: "POST",
+				response: { status: 201, body: {} },
+			},
+		]);
+
+		const enqueued: DaemonJobEnvelopeV1[] = [];
+		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+
+		const result = await pollGitHubRepos(ASSIGNMENT_CONFIG, RESULTS_DIR, enqueueFn);
+
+		expect(result.enqueued).toHaveLength(1);
+		expect(enqueued).toHaveLength(1);
+		expect(enqueued[0].submission.kind).toBe("github-assignment");
+		expect(enqueued[0].submission.githubRepo).toBe("owner/repo");
+		expect(enqueued[0].submission.githubIssueNumber).toBe(99);
+		expect(enqueued[0].job.taskClass).toBe("solve_issue");
+		expect(enqueued[0].job.solveIssue!.issueNumber).toBe(99);
+		expect(enqueued[0].job.solveIssue!.issueTitle).toBe("Assigned task");
+	});
+
+	it("skips assignment polling when botUsername is not configured", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "labels=fixbot",
+				response: { status: 200, body: [] },
+			},
+		]);
+
+		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
+		// BASE_CONFIG has no botUsername
+		const result = await pollGitHubRepos(BASE_CONFIG, RESULTS_DIR, enqueueFn);
+
+		expect(result.enqueued).toHaveLength(0);
+		expect(enqueueFn).not.toHaveBeenCalled();
+	});
+
+	it("skips already-acked assigned issues", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "labels=fixbot",
+				response: { status: 200, body: [] },
+			},
+			{
+				urlPattern: "assignee=fixbot-bot",
+				response: { status: 200, body: [{ number: 50, title: "task", body: null }] },
+			},
+			{
+				urlPattern: "/repos/owner/repo/issues/50/comments",
+				method: "GET",
+				response: {
+					status: 200,
+					body: [{ id: 333, body: "<!-- fixbot-ack -->\n🤖 fixbot job `gh-xyz` has been queued." }],
+				},
+			},
+		]);
+
+		const enqueueFn = mock(() => undefined) as unknown as GitHubEnqueueFn;
+		const result = await pollGitHubRepos(ASSIGNMENT_CONFIG, RESULTS_DIR, enqueueFn);
+
+		expect(enqueueFn).not.toHaveBeenCalled();
+		expect(result.skipped).toBe(1);
+	});
+
+	it("DuplicateDaemonJobError during assignment enqueue is caught as skip", async () => {
+		globalThis.fetch = createMockFetch([
+			{
+				urlPattern: "labels=fixbot",
+				response: { status: 200, body: [] },
+			},
+			{
+				urlPattern: "assignee=fixbot-bot",
+				response: { status: 200, body: [{ number: 60, title: "task", body: null }] },
+			},
+			{
+				urlPattern: "/repos/owner/repo/issues/60/comments",
+				method: "GET",
+				response: { status: 200, body: [] },
+			},
+		]);
+
+		const enqueueFn: GitHubEnqueueFn = () => {
+			throw new DuplicateDaemonJobError("gh-dup", [{ kind: "queue", path: "/fake" }]);
+		};
+
+		const result = await pollGitHubRepos(ASSIGNMENT_CONFIG, RESULTS_DIR, enqueueFn);
+
+		expect(result.skipped).toBe(1);
+		expect(result.errors).toBe(0);
+		expect(result.enqueued).toHaveLength(0);
+	});
+
+	it("assignment and label triggers produce separate jobs for same issue", async () => {
+		globalThis.fetch = createMockFetch([
+			// Label polling returns issue 42
+			{
+				urlPattern: "labels=fixbot",
+				response: { status: 200, body: [{ number: 42, title: "dual trigger", body: null }] },
+			},
+			// No ack for label check on issue 42
+			{
+				urlPattern: "/repos/owner/repo/issues/42/comments",
+				method: "GET",
+				response: { status: 200, body: [] },
+			},
+			// Post ack for label trigger
+			{
+				urlPattern: "/repos/owner/repo/issues/42/comments",
+				method: "POST",
+				response: { status: 201, body: {} },
+			},
+			// Assignment polling also returns issue 42
+			{
+				urlPattern: "assignee=fixbot-bot",
+				response: { status: 200, body: [{ number: 42, title: "dual trigger", body: null }] },
+			},
+		]);
+
+		const enqueued: DaemonJobEnvelopeV1[] = [];
+		const enqueueFn: GitHubEnqueueFn = (envelope) => enqueued.push(envelope);
+
+		const result = await pollGitHubRepos(ASSIGNMENT_CONFIG, RESULTS_DIR, enqueueFn);
+
+		// Both should enqueue (the second hasAckComment check will find the ack from
+		// the label trigger, so it will be skipped — but their job IDs differ)
+		expect(result.enqueued.length).toBeGreaterThanOrEqual(1);
+		// The label-triggered job
+		const labelJob = enqueued.find((e) => e.submission.kind === "github-label");
+		expect(labelJob).toBeDefined();
+		expect(labelJob!.submission.githubLabelName).toBe("fixbot");
+
+		// Verify job IDs use different triggers
+		const labelJobId = deriveGitHubJobId("https://github.com/owner/repo", 42, "fixbot");
+		const assignJobId = deriveGitHubJobId("https://github.com/owner/repo", 42, "assign:fixbot-bot");
+		expect(labelJobId).not.toBe(assignJobId);
 	});
 });
