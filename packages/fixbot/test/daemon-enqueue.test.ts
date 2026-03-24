@@ -1,10 +1,10 @@
+import { afterEach, describe, expect, it } from "bun:test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from "node:fs";
-import { createRequire } from "node:module";
+
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { afterEach, describe, expect, it } from "bun:test";
 import { getArtifactPaths } from "../src/artifacts";
 import { createDaemonStatus } from "../src/config";
 import { createDaemonJobEnvelope, enqueueDaemonJobFromFile } from "../src/daemon/enqueue";
@@ -33,10 +33,8 @@ import {
 	runDaemon,
 } from "../src/index";
 
-const require = createRequire(import.meta.url);
 const packageDirectory = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const cliEntryPath = resolve(packageDirectory, "src/cli.ts");
-const tsxCliPath = require.resolve("tsx/cli");
+const cliEntryPath = resolve(packageDirectory, "../coding-agent/src/cli.ts");
 const validFixtureJobPath = resolve(packageDirectory, "test/fixtures/jobs/manual-enqueue.valid.json");
 const temporaryDirectories: string[] = [];
 const foregroundDaemonStops: Array<() => Promise<void>> = [];
@@ -114,7 +112,7 @@ function createJobFile(configPath: string, name: string, content: string): strin
 }
 
 function runCli(args: string[]): string {
-	return execFileSync(process.execPath, [tsxCliPath, cliEntryPath, ...args], {
+	return execFileSync(process.execPath, [cliEntryPath, ...args], {
 		cwd: packageDirectory,
 		encoding: "utf-8",
 	});
@@ -131,7 +129,7 @@ async function waitFor<T>(
 		if (predicate(lastValue)) {
 			return lastValue;
 		}
-		await new Promise((resolve) => setTimeout(resolve, 25));
+		await new Promise(resolve => setTimeout(resolve, 25));
 		lastValue = await callback();
 	}
 	return lastValue;
@@ -209,7 +207,7 @@ async function startForegroundDaemon(
 
 	const readyStatus = await waitFor(
 		() => readDaemonStatusFile(config),
-		(status) => status?.state === "idle" && status.pid === process.pid,
+		status => status?.state === "idle" && status.pid === process.pid,
 		5_000,
 	);
 	expect(readyStatus?.state).toBe("idle");
@@ -261,7 +259,7 @@ describe("daemon enqueue", () => {
 
 		const runningStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "running" && status.activeJob?.jobId === "manual-enqueue-job",
+			status => status?.state === "running" && status.activeJob?.jobId === "manual-enqueue-job",
 			5_000,
 		);
 		expect(runningStatus?.queue).toEqual({
@@ -282,7 +280,7 @@ describe("daemon enqueue", () => {
 
 		const completedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) =>
+			status =>
 				status?.state === "idle" &&
 				status.activeJob === null &&
 				status.recentResults[0]?.jobId === "manual-enqueue-job",
@@ -407,7 +405,7 @@ describe("daemon enqueue", () => {
 		await runnerStarted.promise;
 		const runningStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "running" && status.activeJob?.jobId === first.envelope.jobId,
+			status => status?.state === "running" && status.activeJob?.jobId === first.envelope.jobId,
 			5_000,
 		);
 		expect(runningStatus?.queue).toEqual({
@@ -424,7 +422,7 @@ describe("daemon enqueue", () => {
 		allowRunnerToFinish.resolve();
 		await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) =>
+			status =>
 				status?.state === "idle" &&
 				status.activeJob === null &&
 				status.recentResults[0]?.jobId === first.envelope.jobId,
@@ -458,7 +456,7 @@ describe("daemon enqueue", () => {
 			await runnerStarted.promise;
 			await waitFor(
 				() => readDaemonStatusFile(daemon.config),
-				(status) => status?.state === "running" && status.activeJob?.jobId === "fifo-job-a",
+				status => status?.state === "running" && status.activeJob?.jobId === "fifo-job-a",
 				5_000,
 			);
 
@@ -477,7 +475,7 @@ describe("daemon enqueue", () => {
 			// Wait until the daemon idle-loop sees the depth change and refreshes status.
 			const backlogStatus = await waitFor(
 				() => readDaemonStatusFile(daemon.config),
-				(status) =>
+				status =>
 					status?.state === "running" && status.activeJob?.jobId === "fifo-job-a" && status.queue.depth === 2,
 				5_000,
 			);
@@ -507,7 +505,7 @@ describe("daemon enqueue", () => {
 			expect(rendered).toContain("Active job: fifo-job-a (running)");
 
 			// Spool directories must agree.
-			expect(listQueuedDaemonJobs(daemon.config).map((r) => r.envelope.jobId)).toEqual(["fifo-job-b", "fifo-job-c"]);
+			expect(listQueuedDaemonJobs(daemon.config).map(r => r.envelope.jobId)).toEqual(["fifo-job-b", "fifo-job-c"]);
 			expect(listActiveDaemonJobs(daemon.config)).toHaveLength(1);
 			expect(listActiveDaemonJobs(daemon.config)[0]?.envelope.jobId).toBe("fifo-job-a");
 		} finally {
@@ -576,7 +574,7 @@ describe("daemon enqueue", () => {
 		// Wait for the queue to fully drain and recent results to arrive.
 		const drainedStatus = await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status?.state === "idle" && status.activeJob === null && status.recentResults.length === 3,
+			status => status?.state === "idle" && status.activeJob === null && status.recentResults.length === 3,
 			5_000,
 		);
 
@@ -588,13 +586,9 @@ describe("daemon enqueue", () => {
 		expect(listQueuedDaemonJobs(daemon.config)).toEqual([]);
 
 		// Recent results are newest-first (C, B, A).
-		expect(drainedStatus?.recentResults.map((r) => r.jobId)).toEqual([
-			"fifo-drain-c",
-			"fifo-drain-b",
-			"fifo-drain-a",
-		]);
-		expect(drainedStatus?.recentResults.map((r) => r.status)).toEqual(["success", "success", "success"]);
-		expect(drainedStatus?.recentResults.map((r) => r.summary)).toEqual([
+		expect(drainedStatus?.recentResults.map(r => r.jobId)).toEqual(["fifo-drain-c", "fifo-drain-b", "fifo-drain-a"]);
+		expect(drainedStatus?.recentResults.map(r => r.status)).toEqual(["success", "success", "success"]);
+		expect(drainedStatus?.recentResults.map(r => r.summary)).toEqual([
 			"fifo-drain-c done",
 			"fifo-drain-b done",
 			"fifo-drain-a done",
@@ -615,11 +609,7 @@ describe("daemon enqueue", () => {
 			createFakeJobResult(job, options.resultsDir),
 		);
 		const restartStatus = readDaemonStatusFile(daemon2.config);
-		expect(restartStatus?.recentResults.map((r) => r.jobId)).toEqual([
-			"fifo-drain-c",
-			"fifo-drain-b",
-			"fifo-drain-a",
-		]);
+		expect(restartStatus?.recentResults.map(r => r.jobId)).toEqual(["fifo-drain-c", "fifo-drain-b", "fifo-drain-a"]);
 	});
 
 	it("re-queues orphaned active spool files at startup for retry", async () => {
@@ -674,12 +664,12 @@ describe("daemon enqueue", () => {
 		// Wait for the daemon to reach idle state.
 		await waitFor(
 			() => readDaemonStatusFile(daemon.config),
-			(status) => status !== undefined && status.pid === process.pid && status.state === "idle",
+			status => status !== undefined && status.pid === process.pid && status.state === "idle",
 			5_000,
 		);
 
 		// The orphan should have been moved from active/ to queue/ (and then processed by the daemon).
-		const activeFiles = readdirSync(storePaths.activeDir).filter((f) => f.endsWith(".json"));
+		const activeFiles = readdirSync(storePaths.activeDir).filter(f => f.endsWith(".json"));
 		expect(activeFiles).toEqual([]);
 	});
 });

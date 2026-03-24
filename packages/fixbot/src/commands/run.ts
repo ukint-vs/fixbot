@@ -16,8 +16,8 @@ export default class Run extends Command {
 		const { runJob } = await import("../runner");
 		const { readFileSync } = await import("node:fs");
 
-		const text = readFileSync(args.job, "utf-8");
-		const job = parseJobSpecText(text, args.job);
+		const text = readFileSync(args.job!, "utf-8");
+		const job = parseJobSpecText(text, args.job!);
 		const result = await runJob(job);
 
 		console.log(JSON.stringify(result, null, 2));

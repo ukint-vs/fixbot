@@ -10,9 +10,16 @@
  */
 import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { AuthCredentialStore, DEFAULT_MODEL_PER_PROVIDER, getOAuthProviders, type KnownProvider, type OAuthProviderId } from "@oh-my-pi/pi-ai";
+import {
+	AuthCredentialStore,
+	DEFAULT_MODEL_PER_PROVIDER,
+	getOAuthProviders,
+	type KnownProvider,
+	type OAuthProviderId,
+} from "@oh-my-pi/pi-ai";
 import { discoverAuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { getAgentDbPath } from "@oh-my-pi/pi-utils";
+import { DEFAULT_DAEMON_CONFIG_FILENAME, DEFAULT_FIXBOT_DIR } from "../config";
 import {
 	ask,
 	askSecret,
@@ -27,7 +34,6 @@ import {
 	success,
 	warn,
 } from "./prompt";
-import { DEFAULT_DAEMON_CONFIG_FILENAME, DEFAULT_FIXBOT_DIR } from "../config";
 
 // ---------------------------------------------------------------------------
 // Provider definitions for API key auth (subset most useful for solo dev)
@@ -77,13 +83,7 @@ const API_KEY_PROVIDERS: ApiKeyProviderChoice[] = [
 ];
 
 // Top OAuth providers to highlight (most commonly used for coding agents)
-const FEATURED_OAUTH_PROVIDERS = [
-	"anthropic",
-	"github-copilot",
-	"openai-codex",
-	"google-gemini-cli",
-	"cursor",
-];
+const FEATURED_OAUTH_PROVIDERS = ["anthropic", "github-copilot", "openai-codex", "google-gemini-cli", "cursor"];
 
 const TOTAL_STEPS = 6;
 
@@ -101,7 +101,7 @@ async function setupAiProvider(): Promise<{ provider: string; saved: boolean }> 
 	info("You can configure multiple providers later — let's start with one.\n");
 
 	// Check if any API key env vars are already set
-	const envProvider = API_KEY_PROVIDERS.find((p) => process.env[p.envVar]);
+	const envProvider = API_KEY_PROVIDERS.find(p => process.env[p.envVar]);
 	if (envProvider) {
 		console.log(`  Found ${envProvider.envVar} in environment.`);
 		const useEnv = await confirm(`Use ${envProvider.name} from environment?`);
@@ -118,7 +118,7 @@ async function setupAiProvider(): Promise<{ provider: string; saved: boolean }> 
 		{ id: "skip", name: "Skip — set up later with 'fixbot login' or env vars" },
 	];
 
-	const method = await choose("How would you like to authenticate?", authMethods, (m) => m.name);
+	const method = await choose("How would you like to authenticate?", authMethods, m => m.name);
 
 	if (method.id === "skip") {
 		warn("Skipped — run 'fixbot login <provider>' or set an API key env var before starting the daemon.");
@@ -136,17 +136,17 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 	const allProviders = getOAuthProviders();
 
 	// Build list: featured providers first, then "More providers..." option
-	const featured = FEATURED_OAUTH_PROVIDERS
-		.map((id) => allProviders.find((p) => p.id === id))
-		.filter((p): p is NonNullable<typeof p> => p != null);
+	const featured = FEATURED_OAUTH_PROVIDERS.map(id => allProviders.find(p => p.id === id)).filter(
+		(p): p is NonNullable<typeof p> => p != null,
+	);
 
 	const choices = [
-		...featured.map((p) => ({ id: p.id, name: p.name })),
+		...featured.map(p => ({ id: p.id, name: p.name })),
 		{ id: "__more__", name: `All providers (${allProviders.length} available)` },
 	];
 
 	let providerId: string;
-	const picked = await choose("Which provider?", choices, (c) => c.name);
+	const picked = await choose("Which provider?", choices, c => c.name);
 
 	if (picked.id === "__more__") {
 		// Show full list
@@ -167,7 +167,7 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 		providerId = picked.id;
 	}
 
-	const providerInfo = allProviders.find((p) => p.id === providerId);
+	const providerInfo = allProviders.find(p => p.id === providerId);
 	if (!providerInfo) {
 		warn("Provider not found");
 		return { provider: "none", saved: false };
@@ -176,7 +176,7 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 	// Run OAuth flow
 	info(`Opening browser for ${providerInfo.name} authentication...`);
 
-	let authStorage;
+	let authStorage: Awaited<ReturnType<typeof discoverAuthStorage>> | undefined;
 	try {
 		authStorage = await discoverAuthStorage();
 	} catch (error) {
@@ -206,9 +206,7 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 				}
 			},
 			onPrompt: async (prompt: { message: string; placeholder?: string }) => {
-				const question = prompt.placeholder
-					? `  ${prompt.message} (${prompt.placeholder})`
-					: `  ${prompt.message}`;
+				const question = prompt.placeholder ? `  ${prompt.message} (${prompt.placeholder})` : `  ${prompt.message}`;
 				return ask(`${question}: `);
 			},
 			onProgress: (message: string) => {
@@ -241,7 +239,7 @@ async function setupOAuth(): Promise<{ provider: string; saved: boolean }> {
 }
 
 async function setupApiKey(): Promise<{ provider: string; saved: boolean }> {
-	const provider = await choose("Which AI provider?", API_KEY_PROVIDERS, (p) => p.name);
+	const provider = await choose("Which AI provider?", API_KEY_PROVIDERS, p => p.name);
 
 	// Check env var for chosen provider
 	const envKey = process.env[provider.envVar];
@@ -301,7 +299,7 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 
 	info("Which AI model should fixbot use for code analysis and fixes?");
 
-	let authStorage;
+	let authStorage: Awaited<ReturnType<typeof discoverAuthStorage>> | undefined;
 	try {
 		authStorage = await discoverAuthStorage();
 	} catch {
@@ -320,7 +318,7 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 
 	// Group by provider and pick the top models (prefer defaults)
 	const providerDefaults = DEFAULT_MODEL_PER_PROVIDER;
-	const providers = [...new Set(available.map((m) => m.provider))];
+	const providers = [...new Set(available.map(m => m.provider))];
 
 	// Build a curated choice list: provider defaults first, then everything else
 	interface ModelOption {
@@ -333,15 +331,15 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 
 	// Prioritize the provider chosen in step 1; show other providers only if user asks
 	const chosenProvider = providerResult.provider !== "none" ? providerResult.provider : undefined;
-	const primaryProviders = chosenProvider ? providers.filter((p) => p === chosenProvider) : providers;
-	const otherProviders = chosenProvider ? providers.filter((p) => p !== chosenProvider) : [];
+	const primaryProviders = chosenProvider ? providers.filter(p => p === chosenProvider) : providers;
+	const otherProviders = chosenProvider ? providers.filter(p => p !== chosenProvider) : [];
 
 	const options: ModelOption[] = [];
 	function addModelsForProviders(providerList: string[]): void {
 		for (const provider of providerList) {
 			const defaultId = providerDefaults[provider as KnownProvider];
-			const providerModels = available.filter((m) => m.provider === provider);
-			const defaultModel = providerModels.find((m) => m.id === defaultId);
+			const providerModels = available.filter(m => m.provider === provider);
+			const defaultModel = providerModels.find(m => m.id === defaultId);
 			if (defaultModel) {
 				options.push({
 					id: `${provider}/${defaultModel.id}`,
@@ -352,7 +350,7 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 				});
 			}
 			// Add a few notable non-default models
-			for (const m of providerModels.filter((m) => m.id !== defaultId).slice(0, 5)) {
+			for (const m of providerModels.filter(m => m.id !== defaultId).slice(0, 5)) {
 				options.push({
 					id: `${provider}/${m.id}`,
 					provider,
@@ -369,7 +367,7 @@ async function setupModel(providerResult: { provider: string; saved: boolean }):
 
 	// If other providers have models, offer them as an expandable section
 	if (otherProviders.length > 0) {
-		const otherAvailable = available.filter((m) => otherProviders.includes(m.provider));
+		const otherAvailable = available.filter(m => otherProviders.includes(m.provider));
 		if (otherAvailable.length > 0) {
 			addModelsForProviders(otherProviders);
 		}
@@ -541,7 +539,7 @@ async function generateDaemonConfig(
 	if (repos.length > 0 || githubToken) {
 		const github: Record<string, unknown> = {};
 		if (repos.length > 0) {
-			github.repos = repos.map((r) => ({
+			github.repos = repos.map(r => ({
 				url: r.url,
 				baseBranch: r.baseBranch,
 				triggerLabel: r.triggerLabel,
@@ -570,7 +568,7 @@ async function generateDaemonConfig(
 		}
 	}
 
-	writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n", "utf-8");
+	writeFileSync(configPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
 	success(`Config written to ${configPath}`);
 
 	return { configPath, config };

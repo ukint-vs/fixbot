@@ -15,8 +15,8 @@ export default class ValidateJob extends Command {
 		const { parseJobSpecText } = await import("../contracts");
 		const { readFileSync } = await import("node:fs");
 
-		const text = readFileSync(args.job, "utf-8");
-		const job = parseJobSpecText(text, args.job);
+		const text = readFileSync(args.job!, "utf-8");
+		const job = parseJobSpecText(text, args.job!);
 		console.log(`Valid ${job.taskClass} job: ${job.jobId}`);
 	}
 }

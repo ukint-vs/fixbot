@@ -3,7 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadDaemonConfig } from "../src/config";
-import { getDaemonStatusFromConfigFile, runDaemon } from "../src/daemon/service";
+import { runDaemon } from "../src/daemon/service";
 import { readDaemonStatusFile } from "../src/daemon/status-store";
 
 const temporaryDirectories: string[] = [];

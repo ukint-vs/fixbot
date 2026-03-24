@@ -1,12 +1,8 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, it } from "bun:test";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-
-// getModels was removed from pi-ai; use a hardcoded fixture model for tests
-const TEST_ANTHROPIC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic" as const } as const;
-
 import { DEFAULT_MODEL_PER_PROVIDER } from "@oh-my-pi/pi-ai";
-import { describe, expect, it } from "bun:test";
 import { AuthStorage, ModelRegistry } from "@oh-my-pi/pi-coding-agent";
 import { resolveExecutionModel, resolveHostAgentConfig } from "../src/host-agent";
 import {
@@ -20,133 +16,113 @@ import type { ExecutionPlanV1, NormalizedJobSpecV1 } from "../src/types";
 
 describe("internal runner", () => {
 	it("resolves an explicit model override when provider auth is available", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
-		const knownAnthropicModel = TEST_ANTHROPIC_MODEL;
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-model",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
-					},
-					model: {
-						provider: "anthropic",
-						modelId: knownAnthropicModel.id,
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-model",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
+						model: { provider: "anthropic", modelId: DEFAULT_MODEL_PER_PROVIDER.anthropic },
 					},
 				},
-			},
-			{ modelRegistry },
-		);
+				{ modelRegistry },
+			);
 
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(knownAnthropicModel.id);
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
+		}
 	});
 
 	it("uses the provider default model when no job override is provided", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-host-default",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-host-default",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
 					},
 				},
-			},
-			{
-				authStorage,
-				modelRegistry,
-			},
-		);
+				{ authStorage, modelRegistry },
+			);
 
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
+		}
 	});
 
 	it("falls back to provider default when no job model override", async () => {
-		const authStorage = AuthStorage.inMemory({
-			anthropic: {
-				type: "api_key",
-				key: "test-key",
-			},
-		});
-		const modelRegistry = new ModelRegistry(authStorage, undefined);
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
+		const originalKey = process.env.ANTHROPIC_API_KEY;
+		process.env.ANTHROPIC_API_KEY = "test-key";
+		try {
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
+			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
-		const model = await resolveExecutionModel(
-			{
-				version: "fixbot.job/v1",
-				jobId: "internal-bad-host-default",
-				taskClass: "fix_ci",
-				repo: {
-					url: "https://example.com/repo.git",
-					baseBranch: "main",
-				},
-				fixCi: {
-					githubActionsRunId: 12345,
-				},
-				execution: {
-					mode: "process",
-					timeoutMs: 300000,
-					memoryLimitMb: 4096,
-					sandbox: {
-						mode: "workspace-write",
-						networkAccess: true,
+			const model = await resolveExecutionModel(
+				{
+					version: "fixbot.job/v1",
+					jobId: "internal-bad-host-default",
+					taskClass: "fix_ci",
+					repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+					fixCi: { githubActionsRunId: 12345 },
+					execution: {
+						mode: "process",
+						timeoutMs: 300000,
+						memoryLimitMb: 4096,
+						sandbox: { mode: "workspace-write", networkAccess: true },
 					},
 				},
-			},
-			{
-				authStorage,
-				modelRegistry,
-			},
-		);
+				{ authStorage, modelRegistry },
+			);
 
-		expect(model.provider).toBe("anthropic");
-		expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			expect(model.provider).toBe("anthropic");
+			expect(model.id).toBe(DEFAULT_MODEL_PER_PROVIDER.anthropic);
+			authStorage.close();
+		} finally {
+			if (originalKey === undefined) delete process.env.ANTHROPIC_API_KEY;
+			else process.env.ANTHROPIC_API_KEY = originalKey;
+			rmSync(dbDir, { recursive: true, force: true });
+		}
 	});
 
 	it("fails fast when no authenticated models are available", async () => {
-		// Clear all env vars that getEnvApiKey() would pick up so the in-memory
-		// auth storage actually has no available models regardless of the host env.
+		const dbDir = mkdtempSync(join(tmpdir(), "fixbot-auth-"));
 		const envKeys = [
 			"GITHUB_TOKEN",
 			"GH_TOKEN",
@@ -160,7 +136,7 @@ describe("internal runner", () => {
 		for (const k of envKeys) process.env[k] = "";
 
 		try {
-			const authStorage = AuthStorage.inMemory();
+			const authStorage = await AuthStorage.create(join(dbDir, "auth.db"));
 			const modelRegistry = new ModelRegistry(authStorage, undefined);
 
 			await expect(
@@ -169,31 +145,25 @@ describe("internal runner", () => {
 						version: "fixbot.job/v1",
 						jobId: "internal-no-model",
 						taskClass: "fix_ci",
-						repo: {
-							url: "https://example.com/repo.git",
-							baseBranch: "main",
-						},
-						fixCi: {
-							githubActionsRunId: 12345,
-						},
+						repo: { url: "https://example.com/repo.git", baseBranch: "main" },
+						fixCi: { githubActionsRunId: 12345 },
 						execution: {
 							mode: "process",
 							timeoutMs: 300000,
 							memoryLimitMb: 4096,
-							sandbox: {
-								mode: "workspace-write",
-								networkAccess: true,
-							},
+							sandbox: { mode: "workspace-write", networkAccess: true },
 						},
 					},
 					{ modelRegistry },
 				),
 			).rejects.toThrow("No authenticated models are available for this fixbot run.");
+			authStorage.close();
 		} finally {
 			for (const [k, v] of Object.entries(savedEnv)) {
 				if (v === undefined) delete process.env[k];
 				else process.env[k] = v;
 			}
+			rmSync(dbDir, { recursive: true, force: true });
 		}
 	});
 
