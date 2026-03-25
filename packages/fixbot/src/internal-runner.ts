@@ -13,8 +13,10 @@ import {
 	Settings,
 } from "@oh-my-pi/pi-coding-agent";
 import { createGhReadOnlyEnvironment } from "./gh-read-only";
+import { createStderrLogger } from "./logger";
 import { resolveHostAgentConfig } from "./host-agent";
 import { parseResultMarkers } from "./markers";
+import { getProjectContext } from "./project-context";
 import {
 	EXECUTION_OUTPUT_VERSION_V1,
 	EXECUTION_PLAN_VERSION_V1,
@@ -390,6 +392,16 @@ export class CodingAgentSessionDriver implements SessionDriver {
 				content: contextContent,
 			},
 		];
+
+		// Inject project knowledge context (three-tier: user-provided > CLAUDE.md/AGENTS.md > generated)
+		const projectCtx = getProjectContext(input.workspaceDir, createStderrLogger("project-context"));
+		if (projectCtx.content) {
+			contextFiles.push({
+				path: join(input.workspaceDir, ".fixbot", "project-context.md"),
+				content: projectCtx.content,
+			});
+			logProgress(`injected project context (${projectCtx.source}, ${projectCtx.content.length} chars)`);
+		}
 
 		const authStorage = await discoverAuthStorage();
 		const modelRegistry = new ModelRegistry(authStorage);
