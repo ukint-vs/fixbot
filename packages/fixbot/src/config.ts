@@ -19,10 +19,12 @@ import {
 	type NormalizedDaemonConfigV1,
 	type NormalizedDaemonGitHubConfig,
 	type NormalizedDaemonGitHubRepoConfig,
+	type RepoCacheConfig,
 	type ResultStatus,
 	TASK_CLASSES,
 	type TaskClass,
 } from "./types";
+import { DEFAULT_REPO_CACHE_CONFIG } from "./repo-cache";
 import {
 	assertBoolean,
 	assertNonEmptyString,
@@ -278,6 +280,29 @@ function normalizeGitHubConfig(raw: unknown, label: string): NormalizedDaemonGit
 	};
 }
 
+function normalizeRepoCacheConfig(raw: unknown, label: string): RepoCacheConfig {
+	const obj = assertObject(raw, label);
+	const enabled =
+		obj.enabled === undefined ? DEFAULT_REPO_CACHE_CONFIG.enabled : assertBoolean(obj.enabled, `${label}.enabled`);
+	const dir =
+		obj.dir === undefined
+			? DEFAULT_REPO_CACHE_CONFIG.dir
+			: assertNonEmptyString(obj.dir, `${label}.dir`).replace(/^~(?=\/)/, homedir());
+	const maxRepos =
+		obj.maxRepos === undefined
+			? DEFAULT_REPO_CACHE_CONFIG.maxRepos
+			: assertPositiveInteger(obj.maxRepos, `${label}.maxRepos`);
+	const maxDiskMb =
+		obj.maxDiskMb === undefined
+			? DEFAULT_REPO_CACHE_CONFIG.maxDiskMb
+			: assertPositiveInteger(obj.maxDiskMb, `${label}.maxDiskMb`);
+	const staleBranchDays =
+		obj.staleBranchDays === undefined
+			? DEFAULT_REPO_CACHE_CONFIG.staleBranchDays
+			: assertPositiveInteger(obj.staleBranchDays, `${label}.staleBranchDays`);
+	return { enabled, dir, maxRepos, maxDiskMb, staleBranchDays };
+}
+
 export function normalizeDaemonConfig(value: unknown, source: string = "daemon config"): NormalizedDaemonConfigV1 {
 	const root = assertObject(value, source);
 	if (root.version !== DAEMON_CONFIG_VERSION_V1) {
@@ -343,6 +368,10 @@ export function normalizeDaemonConfig(value: unknown, source: string = "daemon c
 		github,
 		identity: { botUrl },
 		model,
+		repoCache:
+			root.repoCache === undefined
+				? undefined
+				: normalizeRepoCacheConfig(root.repoCache, `${source}.repoCache`),
 	};
 }
 

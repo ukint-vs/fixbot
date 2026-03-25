@@ -113,6 +113,91 @@ export async function countCommittedChangedFiles(workspaceDir: string, baseCommi
 	}
 }
 
+// ---------------------------------------------------------------------------
+// Bare-clone / worktree helpers (repo-cache)
+// ---------------------------------------------------------------------------
+
+/**
+ * Create a bare clone of a repository.
+ * A bare clone contains only the .git directory objects and refs — no working tree.
+ * This is the long-lived cache object that worktrees are created from.
+ */
+export async function bareCloneRepo(url: string, bareDir: string): Promise<void> {
+	await spawnCommandOrThrow("git", ["clone", "--bare", url, bareDir]);
+}
+
+/**
+ * After a bare clone, `remote.origin.fetch` is unset because there is no
+ * default refspec in bare repos.  Configure it so that `git fetch` pulls
+ * all remote branches into `refs/remotes/origin/*`.
+ */
+export async function configureBareFetchRefspec(bareDir: string): Promise<void> {
+	await spawnCommandOrThrow(
+		"git",
+		["config", "remote.origin.fetch", "+refs/heads/*:refs/remotes/origin/*"],
+		{ cwd: bareDir },
+	);
+}
+
+/**
+ * Fetch a specific branch (or all branches when `branch` is `"*"`)
+ * inside a bare repository.
+ */
+export async function fetchBranch(bareDir: string, branch: string): Promise<void> {
+	if (branch === "*") {
+		await spawnCommandOrThrow("git", ["fetch", "origin"], { cwd: bareDir });
+	} else {
+		await spawnCommandOrThrow("git", ["fetch", "origin", branch], { cwd: bareDir });
+	}
+}
+
+/**
+ * Add a new worktree checked out at `origin/{baseBranch}` on a new
+ * local branch `localBranch`.
+ */
+export async function addWorktree(
+	bareDir: string,
+	worktreeDir: string,
+	localBranch: string,
+	baseBranch: string,
+): Promise<void> {
+	await spawnCommandOrThrow(
+		"git",
+		["worktree", "add", worktreeDir, "-b", localBranch, `origin/${baseBranch}`],
+		{ cwd: bareDir },
+	);
+}
+
+/**
+ * Remove a worktree and delete its local branch.
+ * Non-fatal: logs a warning when the worktree directory has already been deleted.
+ */
+export async function removeWorktree(
+	bareDir: string,
+	worktreeDir: string,
+	localBranch: string,
+	logger?: (message: string) => void,
+): Promise<void> {
+	try {
+		await spawnCommandOrThrow("git", ["worktree", "remove", "--force", worktreeDir], { cwd: bareDir });
+	} catch (err) {
+		logger?.(`[fixbot] git: worktree remove failed for ${worktreeDir}: ${err instanceof Error ? err.message : String(err)}`);
+	}
+	try {
+		await spawnCommandOrThrow("git", ["branch", "-D", localBranch], { cwd: bareDir });
+	} catch {
+		// Branch may not exist if worktree creation failed partway.
+	}
+}
+
+/**
+ * Prune stale worktree bookkeeping entries that point to directories
+ * that no longer exist on disk.
+ */
+export async function pruneWorktrees(bareDir: string): Promise<void> {
+	await spawnCommandOrThrow("git", ["worktree", "prune"], { cwd: bareDir });
+}
+
 export function copyOptionalWorkspaceArtifact(
 	workspaceDir: string,
 	relativePath: string,
