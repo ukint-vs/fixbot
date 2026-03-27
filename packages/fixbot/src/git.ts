@@ -1,6 +1,18 @@
 import { copyFileSync, existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { spawnCommandOrThrow } from "./command";
+
+/**
+ * Create a temporary GIT_ASKPASS script that echoes the token.
+ * This avoids embedding the token in URLs where it could leak
+ * into error messages, logs, or `.git/config`.
+ */
+export function createAskPassScript(token: string): string {
+	const scriptPath = join(tmpdir(), `fixbot-askpass-${process.pid}-${Date.now()}.sh`);
+	writeFileSync(scriptPath, `#!/bin/sh\necho "${token}"\n`, { mode: 0o700 });
+	return scriptPath;
+}
 
 export async function cloneRepository(url: string, baseBranch: string, workspaceDir: string): Promise<void> {
 	await spawnCommandOrThrow("git", [
@@ -124,4 +136,17 @@ export function copyOptionalWorkspaceArtifact(
 	}
 	copyFileSync(source, destination);
 	return true;
+}
+
+/**
+ * Fetch the latest remote state and rebase the current branch onto the base branch.
+ * Used by the comment-addressing cycle to ensure the PR branch is up-to-date.
+ */
+export async function fetchAndRebaseOnBase(
+	workspaceDir: string,
+	baseBranch: string,
+	remoteName = "origin",
+): Promise<void> {
+	await spawnCommandOrThrow("git", ["fetch", remoteName, baseBranch], { cwd: workspaceDir });
+	await spawnCommandOrThrow("git", ["rebase", `${remoteName}/${baseBranch}`], { cwd: workspaceDir });
 }

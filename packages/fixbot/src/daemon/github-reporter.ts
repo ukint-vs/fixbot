@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { spawnCommandOrThrow } from "../command";
 import { configureLocalGitIdentity, tryEnableGpgSigning } from "../git";
 import type { DaemonJobEnvelopeV1, DaemonSubmissionSourceV1, JobResultV1, NormalizedDaemonConfigV1 } from "../types";
+import { registerPR } from "./comment-poller";
 
 // ---------------------------------------------------------------------------
 // URL / owner-repo parsing
@@ -440,6 +441,18 @@ export async function reportJobResult(
 		const prBody = buildPRBody(result, envelope.jobId, envelope.submission, config.identity.botUrl);
 		const pr = await createPullRequest(owner, repo, title, prBody, branchName, baseBranch, token, logger);
 		logger?.(`[fixbot] github-report: opened PR #${pr.number}`);
+
+		// Register the newly created PR for comment tracking.
+		registerPR(config.paths.stateDir, {
+			owner,
+			repo,
+			prNumber: pr.number,
+			headBranch: branchName,
+			baseBranch,
+			repoUrl: githubRepo,
+			jobId: envelope.jobId,
+		});
+
 		return;
 	}
 
