@@ -5,6 +5,19 @@ export const EXECUTION_OUTPUT_VERSION_V1 = "fixbot.execution-output/v1" as const
 export const DAEMON_CONFIG_VERSION_V1 = "fixbot.daemon-config/v1" as const;
 export const DAEMON_STATUS_VERSION_V1 = "fixbot.daemon-status/v1" as const;
 export const DAEMON_JOB_ENVELOPE_VERSION_V1 = "fixbot.daemon-job-envelope/v1" as const;
+export const LEARNING_ENTRY_VERSION_V1 = "fixbot.learning/v1" as const;
+
+export const ERROR_CATEGORIES = [
+	"timeout",
+	"auth_error",
+	"no_changes",
+	"rate_limit",
+	"model_refusal",
+	"build_failure",
+	"test_failure",
+	"unknown",
+] as const;
+export type ErrorCategory = (typeof ERROR_CATEGORIES)[number];
 
 export const DAEMON_LIFECYCLE_STATES = ["starting", "idle", "running", "degraded", "error"] as const;
 
@@ -392,4 +405,19 @@ export interface DaemonStatusSnapshotV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+}
+
+// ---------------------------------------------------------------------------
+// Per-repo learning types
+// ---------------------------------------------------------------------------
+
+export interface LearningEntryV1 {
+	version: typeof LEARNING_ENTRY_VERSION_V1;
+	jobId: string;
+	taskClass: TaskClass;
+	status: ResultStatus;
+	errorCategory: ErrorCategory | null;
+	summary: string;
+	durationMs: number;
+	timestamp: string;
 }
