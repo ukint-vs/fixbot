@@ -15,6 +15,7 @@ import type {
 } from "../types";
 import { exchangeInstallationToken, isTokenExpiringSoon, type TokenCache } from "./github-app-auth";
 import type { GitHubPollResult } from "./github-poller";
+import { createWebhookServer, type WebhookServer } from "./webhook-server";
 import { pollGitHubRepos } from "./github-poller";
 import { reportJobResult } from "./github-reporter";
 import {
@@ -606,6 +607,7 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 		});
 	}
 
+	let webhookServer: WebhookServer | undefined;
 	let shuttingDown = false;
 	let stopSummary: DaemonErrorSummary | undefined;
 
@@ -640,6 +642,21 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 		// Resolve App auth token before the first poll cycle.
 		if (options.tokenProvider || (config.github?.appAuth && !config.github.token)) {
 			await resolveToken();
+		}
+
+		// Start webhook server if configured and enabled.
+		if (config.webhook?.enabled) {
+			try {
+				webhookServer = createWebhookServer({
+					config,
+					webhookConfig: config.webhook,
+					logger,
+				});
+				renderLog(logger, `webhook: server started on port ${webhookServer.port}`);
+			} catch (webhookError) {
+				const msg = webhookError instanceof Error ? webhookError.message : String(webhookError);
+				logger?.error(`webhook: failed to start server: ${msg}`);
+			}
 		}
 
 		let lastHeartbeatMs = Date.parse(startedAt);
@@ -744,6 +761,9 @@ export async function runDaemon(config: NormalizedDaemonConfigV1, options: RunDa
 		}
 		stopSummary = stopSummary ?? buildErrorSummary("daemon stopped by operator", "STOPPED");
 	} finally {
+		if (webhookServer) {
+			try { await webhookServer.stop(); } catch (e) { logger?.error(`webhook shutdown: ${e instanceof Error ? e.message : String(e)}`); }
+		}
 		const stopStatus = createDaemonStatus(config, {
 			state: currentStatus.state === "error" ? "error" : "degraded",
 			startedAt: currentStatus.startedAt,
