@@ -105,7 +105,7 @@ function parseDaemonJobEnvelope(value: unknown, label: string): DaemonJobEnvelop
 	}
 
 	const artifacts = assertObject(envelope.artifacts, `${label}.artifacts`);
-	return {
+	const parsed: DaemonJobEnvelopeV1 = {
 		version: DAEMON_JOB_ENVELOPE_VERSION_V1,
 		jobId,
 		job,
@@ -116,6 +116,13 @@ function parseDaemonJobEnvelope(value: unknown, label: string): DaemonJobEnvelop
 			resultFile: assertNonEmptyString(artifacts.resultFile, `${label}.artifacts.resultFile`),
 		},
 	};
+	if (typeof envelope.retryCount === "number") parsed.retryCount = envelope.retryCount;
+	if (typeof envelope.maxRetries === "number") parsed.maxRetries = envelope.maxRetries;
+	if (typeof envelope.nextRetryAt === "string") parsed.nextRetryAt = envelope.nextRetryAt;
+	if (typeof envelope.lastFailureReason === "string") parsed.lastFailureReason = envelope.lastFailureReason;
+	if (typeof envelope.lastFailureClassification === "string") parsed.lastFailureClassification = envelope.lastFailureClassification as DaemonJobEnvelopeV1["lastFailureClassification"];
+	if (typeof envelope.originalJobId === "string") parsed.originalJobId = envelope.originalJobId;
+	return parsed;
 }
 
 function fileExists(filePath: string): boolean {
@@ -321,11 +328,19 @@ export function enqueueDaemonJob(
 	};
 }
 
+function isRetryEligible(envelope: DaemonJobEnvelopeV1): boolean {
+	if (!envelope.nextRetryAt) return true;
+	const retryAtMs = Date.parse(envelope.nextRetryAt);
+	if (Number.isNaN(retryAtMs)) return true;
+	return Date.now() >= retryAtMs;
+}
+
 export function claimNextQueuedDaemonJob(
 	config: Pick<NormalizedDaemonConfigV1, "paths">,
 ): ClaimedDaemonJobRecord | null {
 	const paths = ensureDaemonJobStoreDirectories(config);
 	for (const queued of listQueuedDaemonJobs(config)) {
+		if (!isRetryEligible(queued.envelope)) continue;
 		const activeFileName = buildActiveFileName(queued.envelope.jobId);
 		const activeFilePath = join(paths.activeDir, activeFileName);
 		if (fileExists(activeFilePath)) {

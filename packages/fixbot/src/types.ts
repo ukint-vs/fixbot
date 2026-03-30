@@ -322,6 +322,8 @@ export interface DaemonJobArtifactSummaryV1 {
 	resultFile: string;
 }
 
+export type FailureClassification = "reporter" | "agent" | "unknown";
+
 export interface DaemonJobEnvelopeV1 {
 	version: typeof DAEMON_JOB_ENVELOPE_VERSION_V1;
 	jobId: string;
@@ -329,6 +331,17 @@ export interface DaemonJobEnvelopeV1 {
 	submission: DaemonSubmissionSourceV1;
 	enqueuedAt: string;
 	artifacts: DaemonJobArtifactSummaryV1;
+	retryCount?: number;
+	maxRetries?: number;
+	nextRetryAt?: string;
+	lastFailureReason?: string;
+	lastFailureClassification?: FailureClassification;
+	originalJobId?: string;
+}
+
+export interface RetryStats {
+	retriesScheduled: number;
+	retriesExhausted: number;
 }
 
 export interface DaemonQueuedJobPreviewV1 {
@@ -377,6 +390,7 @@ export interface DaemonStatusV1 {
 	queue: DaemonQueueStatusV1;
 	activeJob: DaemonActiveJobStatusV1 | null;
 	recentResults: DaemonRecentResultSummaryV1[];
+	retryStats?: RetryStats;
 }
 
 export interface DaemonStatusSnapshotV1 {

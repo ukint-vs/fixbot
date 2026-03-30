@@ -364,6 +364,29 @@ export function buildNoPatchCommentBody(
 	].join("\n");
 }
 
+export function buildFinalFailureCommentBody(
+	envelope: DaemonJobEnvelopeV1,
+	failureReason: string,
+	attemptCount: number,
+	result?: JobResultV1,
+): string {
+	const classification = envelope.lastFailureClassification ?? "unknown";
+	const originalJobId = envelope.originalJobId ?? envelope.jobId;
+	const lines: string[] = [
+		"<!-- fixbot-result -->",
+		`\u{1f534} **fixbot repair failed after ${attemptCount + 1} attempt(s)**`,
+		"",
+		`**Last error:** ${failureReason}`,
+		`**Failure type:** ${classification}`,
+		`**Original job:** \`${originalJobId}\``,
+	];
+	if (result?.artifacts?.rootDir) {
+		lines.push(`**Artifacts:** \`${result.artifacts.rootDir}\``);
+	}
+	lines.push("", "*All retry attempts have been exhausted. Manual investigation is required.*");
+	return lines.join("\n");
+}
+
 // ---------------------------------------------------------------------------
 // Main entry point
 // ---------------------------------------------------------------------------
